@@ -14,130 +14,95 @@ from Helpers.constants import WAIT_FOR_LOAD_STATE_TIMEOUT
 
 
 async def extract_league_matches(page: Page, target_date: str) -> List[Dict]:
-    """
-    Extract matches using robust hardcoded selectors with intelligent fallbacks.
-    """
-    print("  [Harvest] Starting match extraction...")
+    """Iterates through all league headers, expands them, and extracts matches for a specific date."""
+    print("  [Harvest] Starting 'Expand & Harvest' sequence...")
     all_matches = []
-
-    # Dynamic selectors from knowledge base
-    # User Requirement: No hardcoded selectors.
     
-    league_header_sel = get_selector("fb_schedule_page", "match_card_header")
-    match_rows_sel = get_selector("fb_schedule_page", "match_rows")
-    match_url_sel = get_selector("fb_schedule_page", "match_url")
-    
-    if not league_header_sel or not match_rows_sel or not match_url_sel:
-        print("  [Harvest] Critical selectors missing in knowledge.json")
-        return all_matches
-
-    working_selectors = {
-        "league_header": league_header_sel,
-        "match_rows": match_rows_sel,
-        "match_url": match_url_sel
-    }
-
-    print(f"  [Harvest] Using dynamic selectors: {working_selectors}")
-
-    if not working_selectors:
-        print("  [Harvest] No working selectors found")
-        return all_matches
+    league_header_sel = get_selector("fb_schedule_page", "league_header") or ".league-title-wrapper"
+    match_card_sel = get_selector("fb_schedule_page", "match_rows") or ".match-card-section.match-card"
+    match_url_sel = get_selector("fb_schedule_page", "match_url") or ".match-card > a.card-link"
+    league_title_sel = get_selector("fb_schedule_page", "league_title_link") or ".league-link"
 
     try:
-        await asyncio.sleep(2.0)
+        league_headers = await page.locator(league_header_sel).all()
+        print(f"  [Harvest] Found {len(league_headers)} league headers.")
 
-        # Extract all matches using the working selectors
-        matches_data = await page.evaluate("""(selectors, targetDate) => {
-            const results = [];
+        for i, header_locator in enumerate(league_headers):
+            try:
+                # Extract League Name
+                league_element = header_locator.locator(league_title_sel).first
+                if await league_element.is_visible():
+                    league_text = (await league_element.inner_text(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)).strip().replace('\n', ' - ')
+                elif await header_locator.locator("h4").count() > 0:
+                    league_text = (await header_locator.locator("h4").first.inner_text()).strip().replace('\n', ' - ')
+                else:
+                    league_text = f"Unknown League {i+1}"
+                
+                print(f"  -> Processing League {i+1}: {league_text}")
 
-            // Find all league headers
-            const leagueHeaders = document.querySelectorAll(selectors.league_header);
-            console.log(`Found ${leagueHeaders.length} league headers`);
+                # Check expansion state
+                wrapper_class = await header_locator.get_attribute("class")
+                is_collapsed = "collapsed" in str(wrapper_class)
 
-            // Find all match rows
-            const matchRows = document.querySelectorAll(selectors.match_rows);
-            console.log(`Found ${matchRows.length} match rows`);
+                if is_collapsed:
+                    print(f"    -> {league_text}: clicked to expand.")
+                    await header_locator.click()
+                    await asyncio.sleep(2.0) # Wait for animation
+                    
+                    # Double check if it expanded
+                    wrapper_class_after = await header_locator.get_attribute("class")
+                    if "collapsed" in str(wrapper_class_after):
+                         print(f"    -> {league_text}: Still collapsed. Clicking again to expand...")
+                         await header_locator.click()
+                         await asyncio.sleep(2.0)
+                         print(f"    -> {league_text}: Clicked to expand.")
+                else:
+                    print(f"    -> {league_text}: Already expanded. Extracting matches...")
 
-            // Process each league
-            leagueHeaders.forEach((header, leagueIndex) => {
-                try {
-                    // Extract league name
-                    const leagueNameEl = header.querySelector('h4, h3') || header;
-                    const leagueName = leagueNameEl.textContent ? leagueNameEl.textContent.trim() : `League ${leagueIndex + 1}`;
-
-                    // Find matches that belong to this league
-                    const leagueMatches = [];
-                    for (const matchRow of matchRows) {
-                        // Check if this match comes after the current league header
-                        if (header.compareDocumentPosition(matchRow) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                            // Check if it comes before the next league header
-                            let belongsToLeague = true;
-                            for (let i = leagueIndex + 1; i < leagueHeaders.length; i++) {
-                                const nextHeader = leagueHeaders[i];
-                                if (!(nextHeader.compareDocumentPosition(matchRow) & Node.DOCUMENT_POSITION_FOLLOWING)) {
-                                    belongsToLeague = false;
-                                    break;
-                                }
-                            }
-                            if (belongsToLeague) {
-                                leagueMatches.push(matchRow);
-                            }
-                        }
-                    }
-
-                    console.log(`League "${leagueName}": ${leagueMatches.length} matches`);
-
-                    // Extract data from each match
-                    leagueMatches.forEach(matchRow => {
-                        try {
-                            // Extract team names
-                            const homeTeamEl = matchRow.querySelector('.home-team-name, .team-name:first-child, [class*="home"], .home');
-                            const awayTeamEl = matchRow.querySelector('.away-team-name, .team-name:last-child, [class*="away"], .away');
-
-                            // Extract time
-                            const timeEl = matchRow.querySelector('.match-time, .gmt-time, [class*="time"], .time');
-
-                            // Extract URL
-                            const urlEl = matchRow.querySelector(selectors.match_url) ||
-                                        matchRow.querySelector('a') ||
-                                        matchRow.closest('a');
-
-                            if (homeTeamEl && awayTeamEl) {
-                                const homeTeam = homeTeamEl.textContent ? homeTeamEl.textContent.trim() : 'Unknown';
-                                const awayTeam = awayTeamEl.textContent ? awayTeamEl.textContent.trim() : 'Unknown';
-                                const time = timeEl ? (timeEl.textContent ? timeEl.textContent.trim() : 'N/A') : 'N/A';
-                                const url = urlEl ? (urlEl.href || urlEl.getAttribute('href') || '') : '';
-
-                                results.push({
-                                    home: homeTeam,
-                                    away: awayTeam,
-                                    time: time,
-                                    league: leagueName,
-                                    url: url,
-                                    date: targetDate
+                # Extract Matches from Sibling Container
+                matches_container = await header_locator.evaluate_handle('(el) => el.nextElementSibling')
+                if matches_container:
+                    matches_in_section = await matches_container.evaluate("""(container, args) => {
+                        const { selectors, leagueText } = args;
+                        const results = [];
+                        const cards = container.querySelectorAll(selectors.match_card_sel);
+                        cards.forEach(card => {
+                            const homeEl = card.querySelector('.home-team-name');
+                            const awayEl = card.querySelector('.away-team-name');
+                            const timeEl = card.querySelector('.time');
+                            const linkEl = card.querySelector(selectors.match_url_sel) || card.closest('a');
+                            
+                            if (homeEl && awayEl) {
+                                results.push({ 
+                                    home: homeEl.innerText.trim(), 
+                                    away: awayEl.innerText.trim(), 
+                                    time: timeEl ? timeEl.innerText.trim() : "N/A", 
+                                    league: leagueText, 
+                                    url: linkEl ? linkEl.href : "", 
+                                    date: args.targetDate 
                                 });
                             }
-                        } catch (matchError) {
-                            console.log('Error processing match:', matchError);
-                        }
-                    });
+                        });
+                        return results;
+                    }""", {"selectors": {"match_card_sel": match_card_sel, "match_url_sel": match_url_sel}, "leagueText": league_text, "targetDate": target_date})
+                    
+                    if matches_in_section:
+                        all_matches.extend(matches_in_section)
+                        print(f"    -> {league_text}: Extracted {len(matches_in_section)} matches.")
+                    else:
+                        print(f"    -> {league_text}: No matches found in section.")
+                
+                # Close section after processing to keep page clean/performant
+                wrapper_class_final = await header_locator.get_attribute("class")
+                if "collapsed" not in str(wrapper_class_final):
+                     await header_locator.click()
+                     print(f"    -> {league_text}: Closing expanded section.")
+                     await asyncio.sleep(1)
 
-                } catch (leagueError) {
-                    console.log('Error processing league:', leagueError);
-                }
-            });
-
-            return results;
-        }""", working_selectors, target_date)
-
-        if matches_data and len(matches_data) > 0:
-            all_matches.extend(matches_data)
-            print(f"  [Harvest] Successfully extracted {len(matches_data)} matches")
-        else:
-            print("  [Harvest] No matches found with current selectors")
-
+            except Exception as e:
+                print(f"    [Harvest Error] Failed to process a league header: {e}")
     except Exception as e:
-        print(f"  [Harvest] Extraction failed: {e}")
+        print(f"  [Harvest] Overall harvesting error: {e}")
 
     print(f"  [Harvest] Total matches found: {len(all_matches)}")
     return all_matches

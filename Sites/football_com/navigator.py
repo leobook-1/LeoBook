@@ -128,6 +128,7 @@ async def perform_login(page: Page):
 async def extract_balance(page: Page) -> float:
     """Extract account balance."""
     print("  [Money] Retrieving account balance...")
+    await asyncio.sleep(2)
     try:
         balance_sel = get_selector("fb_main_page", "navbar_balance")
         
@@ -166,6 +167,8 @@ async def navigate_to_schedule(page: Page):
     print("  [Navigation] Dynamic selector failed. Using direct URL navigation.")
     await page.goto("https://www.football.com/ng/m/sport/football/", wait_until='domcontentloaded', timeout=30000)
     print("  [Navigation] Schedule page loaded via direct URL.")
+    await asyncio.sleep(1)
+    
 
 async def select_target_date(page: Page, target_date: str) -> bool:
     """Select the target date in the schedule and validate using dynamic and robust selectors."""
@@ -193,7 +196,7 @@ async def select_target_date(page: Page, target_date: str) -> bool:
     # Parse target date and select appropriate day
     target_dt = dt.strptime(target_date, "%d.%m.%Y")
     if target_dt.date() == dt.now().date():
-        possible_days = ["Today", "Today's"]
+        possible_days = ["Today"]
     else:
         full_day = target_dt.strftime("%A")
         short_day = target_dt.strftime("%a")
@@ -203,75 +206,97 @@ async def select_target_date(page: Page, target_date: str) -> bool:
 
     # Try to find and click the target day
     day_found = False
-    item_selector = get_selector("fb_schedule_page", "dropdown_time_items")
+    league_sorted = False
     
     for day in possible_days:
         try:
             # Try specific dynamic item selector if available + text filter
-            if item_selector:
-                 day_selector = f"{item_selector}:has-text('{day}')"
-            else:
-                 day_selector = f"text='{day}'"
-                 
+            day_selector = f"text='{day}'"
             if await page.locator(day_selector).count() > 0:
-                await page.locator(day_selector).first.click()
+                await page.locator(f'li:has-text("{day}")').click()
                 print(f"  [Filter] Successfully selected: {day}")
                 day_found = True
-                #break
+            else:
+                continue
         except Exception as e:
             print(f"  [Filter] Failed to select {day}: {e}")
             continue
 
-    if not day_found:
-        print(f"  [Filter] Day {possible_days} not available in dropdown for {target_date}")
-        return False
+        await page.wait_for_load_state('networkidle', timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
+        await asyncio.sleep(1)
 
-    await page.wait_for_load_state('networkidle', timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-    await asyncio.sleep(2)
-
-    # Sort by League 
-    try:
-        sort_sel = get_selector("fb_schedule_page", "sort_dropdown")
-        if sort_sel:
-            try:
+        # Sort by League (Mandatory)
+        try:
+            sort_sel = get_selector("fb_schedule_page", "sort_dropdown")
+            print(f"  [Debug] sort_sel: {sort_sel}")
+            if sort_sel:
                 if await page.locator(sort_sel).count() > 0:
                     await page.locator(sort_sel).first.click()
                     await asyncio.sleep(1)
 
                     # Try to select "League" from dropdown options (Content filter)
-                    league_option = "text='League'"
-                    if await page.locator(league_option).count() > 0:
-                        await page.locator(league_option).second.click()
-                        print("  [Filter] Successfully sorted by League")
-                        await asyncio.sleep(2)
-            except Exception as e:
-                print(f"  [Filter] Sort selector failed: {sort_sel} - {e}")
+                    target_sort = "League"
+                    league_selector = f"text='{target_sort}'"
+                    await page.locator(f'{sort_sel} >> div.m-list').wait_for(state="visible")
+                    await page.locator(f'{sort_sel} >> li:has-text("{target_sort}")').click()
+                    print("  [Filter] Successfully sorted by League")
+                    league_sorted = True
+                    await asyncio.sleep(1)
+                    break
+                else:
+                        print(f"  [Filter] League option not found using: {league_selector}")
+                        
+        except Exception as e:
+            print(f"  [Filter] League sorting failed: {e}")
 
-    except Exception as e:
-        print(f"  [Filter] League sorting failed (non-critical): {e}")
+        if day_found and not league_sorted:
+             print(f"  [Filter] Date selected but mandatory League sorting failed.")
+             return False
 
-    # Basic validation - check if page loaded matches
+    if not day_found:
+        print(f"  [Filter] Day {possible_days} not available in dropdown for {target_date}")
+        return False
+
+    if not league_sorted:
+        print(f"  [Filter] Mandatory sorting (Date & League) failed for {target_date}")
+        return False
+
+
+    # Date validation - check if target date was selected
     try:
         # Look for any match time elements to validate we're on the right date page
-        time_selectors = [
-            ".time",                              # Generic time class
-            "[class*='time']",                    # Class containing 'time'
-            "span:not(.divider)",                 # Football.com specific time format
-        ]
-
-        for time_sel in time_selectors:
+        # User Requirement: Use dynamically retrieved 'match_row_time'
+        time_sel = get_selector("fb_schedule_page", "match_row_time")
+        
+        if time_sel:
             try:
                 if await page.locator(time_sel).count() > 0:
-                    sample_time = await page.locator(time_sel).first.inner_text(timeout=3000)
-                    if sample_time and len(sample_time.strip()) > 0:
-                        print(f"  [Navigation] Page validation successful - found match times")
-                        return True
-            except:
-                continue
-
-        print("  [Navigation] Page validation completed (no time elements found but proceeding)")
+                    sample_time = (await page.locator(time_sel).first.inner_text(timeout=3000)).strip()
+                    if sample_time:
+                        try:
+                            # Intelligent Date Validation: Compare "29 Dec" (sample) with "29.12" (target)
+                            target_dt = dt.strptime(target_date, "%d.%m.%Y")
+                            
+                            # Sample format expected: "29 Dec, 17:00"
+                            date_part_str = sample_time.split(',')[0].strip()
+                            # Append target year to handle leap years correctly during parsing
+                            sample_dt = dt.strptime(f"{date_part_str} {target_dt.year}", "%d %b %Y")
+                            
+                            if sample_dt.day == target_dt.day and sample_dt.month == target_dt.month:
+                                print(f"  [Navigation] Page validation successful - found match times {sample_time} matching {target_date}")
+                                return True
+                            else:
+                                print(f"  [Navigation] Validation Mismatch: Page shows {sample_time}, expected {target_date}")
+                                return False
+                        except ValueError:
+                            print(f"  [Navigation] Validation warning: Could not parse date from '{sample_time}'. Assuming invalid.")
+                            return False
+            except Exception:
+                pass
+        
+        print("  [Navigation] Page validation warning: Time elements not found using configured selector")
         return True
-
+    
     except Exception as e:
-        print(f"  [Navigation Error] Validation failed: {e}")
+        print(f"  [Navigation] Page validation logic failed (non-critical): {e}")
         return False

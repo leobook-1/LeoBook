@@ -5043,7 +5043,8 @@
         "match_row_odds_button_away": ".m-featured-match-card-container .outcome-row > div:nth-child(3)",
         "match_row_icon_stats": ".m-featured-match-card-container .event-widget-item[data-icon=\"statistics\"]",
         "match_row_icon_eye": ".m-featured-match-card-container .event-widget-item-wrapper svg[viewBox=\"0 0 48 48\"]",
-        "match_row_icon_chat": ".m-featured-match-card-container .event-widget-item-wrapper svg[viewBox=\"0 0 49 49\"]"
+        "match_row_icon_chat": ".m-featured-match-card-container .event-widget-item-wrapper svg[viewBox=\"0 0 49 49\"]",
+        "full_schedule_button": "div.to-full-events:has-text('Full Schedule')"
     },
     "fb_schedule_page": {
         "sport_container": ".m-event-list",
@@ -5051,7 +5052,7 @@
         "match_rows": ".match-card-section.match-card",
         "match_row_home_team_name": ".match-card-section.match-card .flex-column .team-name:first-child",
         "match_row_away_team_name": ".match-card-section.match-card .flex-column .team-name:last-child",
-        "match_row_time": ".match-card .time",
+        "match_row_time": ".time",
         "league_category": "div.league-title-wrapper h4",
         "event_row_link": ".match-card-section.match-card > a.card-link",
         "search_button": ".m-nav-right .search-icon",
@@ -5242,7 +5243,9 @@
         "odds_grid_header_2": "section.market-title-bar-upcoming .right-box h5:nth-child(3)",
         "match_card_additional_markets_count": ".match-card-section.match-card .total-market-size span:nth-child(2)",
         "match_row_icon_stats": ".match-card-section.match-card .event-widget-item[data-icon=\"statistics\"]",
-        "league_matches_count": ".league-title-wrapper h5"
+        "league_matches_count": ".league-title-wrapper h5",
+        "dropdown_time_items": "div.m-dropdown-item",
+        "sort_dropdown": "div.m-choose-sort:has-text('Sort')"
     },
     "fb_match_page": {
         "top_container_nav_bar": "div.m-nav-secondary.withHome.m-topnav",
@@ -6040,10 +6043,6 @@
         "sticky_table_header_1": "section.sticky-market-title-bar .right-box h5:nth-child(1)",
         "sticky_table_header_x": "section.sticky-market-title-bar .right-box h5:nth-child(2)",
         "sticky_table_header_2": "section.sticky-market-title-bar .right-box h5:nth-child(3)",
-        "full_schedule_button": "span[data-cms-key='full_schedule']",
-        "filter_dropdown_today": "div.m-choose-time",
-        "dropdown_time_items": "div.m-dropdown-item",
-        "sort_dropdown": "div.m-choose-sort",
         "match_card_header": "section.match-card-section.match-card div.header",
         "search_icon": ".search-icon",
         "search_input": "input.searchMode",
