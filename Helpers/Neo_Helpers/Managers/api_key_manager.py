@@ -1,149 +1,78 @@
 # api_key_manager.py
 import os
 import json
-import asyncio
-import atexit
-from dotenv import load_dotenv
+import base64
+import ollama
 
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
+# Default model, can be overridden by env or config
+DEFAULT_MODEL = "qwen3-vl:2b"
 
-load_dotenv()
-
-class ApiKeyManager:
+async def gemini_api_call_with_rotation(prompt_content, generation_config=None, **kwargs):
     """
-    Manages a pool of Gemini API keys from environment variables.
-    Handles loading, rotating, and providing the current key.
+    Replaces the original Gemini API call with a local Ollama call.
+    Maintains the function name to avoid breaking existing imports,
+    but redirects logic to the local qwen3-vl model.
     """
-    def __init__(self):
-        self.keys = self._load_keys()
-        self.current_key_index = 0
-        self.exhausted_keys = set()
-        self._load_state()
-        if not self.keys:
-            raise ValueError("No Google API keys found. Please set GOOGLE_API_KEYS in your .env file.")
-        print(f"  [API Key] Loaded {len(self.keys)} keys. Starting with index {self.current_key_index}. Exhausted: {len(self.exhausted_keys)}")
+    print(f"    [Ollama] Processing request with model {DEFAULT_MODEL}...")
 
-    def _load_state(self):
-        """Loads the state from a file."""
-        state_file = "DB/auth/api_key_state.json"
-        if os.path.exists(state_file):
-            try:
-                with open(state_file, 'r') as f:
-                    state = json.load(f)
-                    loaded_index = state.get('last_index', 0)
-                    if 0 <= loaded_index < len(self.keys):
-                        self.current_key_index = loaded_index
-                    else:
-                        print(f"  [API Key] Loaded index {loaded_index} out of range. Resetting to 0.")
-                        self.current_key_index = 0
-                    self.exhausted_keys = set(state.get('exhausted', []))
-            except Exception as e:
-                print(f"  [API Key] Failed to load state: {e}")
+    # precise input parsing
+    prompt_text = ""
+    images = []
 
-    def _save_state(self):
-        """Saves the current state to a file."""
-        state_file = "DB/auth/api_key_state.json"
-        state = {
-            'last_index': self.current_key_index,
-            'exhausted': list(self.exhausted_keys)
+    if isinstance(prompt_content, list):
+        for item in prompt_content:
+            if isinstance(item, str):
+                prompt_text += item + "\n"
+            elif isinstance(item, dict) and "inline_data" in item:
+                # Extract image data
+                # Expected format: {"inline_data": {"mime_type": "image/png", "data": base64_str}}
+                b64_data = item["inline_data"].get("data")
+                if b64_data:
+                    # Ollama python client accepts base64 strings in the 'images' list for vision models
+                    # It also accepts bytes. Let's pass the bytes to be safe, or just the b64 string.
+                    # Qwen2-VL/Qwen3-VL in Ollama supports base64.
+                    # The python library 'ollama' expects 'images': [path_or_bytes_or_base64]
+                    images.append(b64_data)
+    elif isinstance(prompt_content, str):
+        prompt_text = prompt_content
+
+    # Extract temperature from generation_config if provided
+    options = {}
+    if generation_config:
+        # generation_config might be an object or dict
+        if hasattr(generation_config, 'temperature'):
+            options['temperature'] = generation_config.temperature
+        elif isinstance(generation_config, dict) and 'temperature' in generation_config:
+            options['temperature'] = generation_config['temperature']
+    
+    # Defaults
+    if 'temperature' not in options:
+        options['temperature'] = 0.1
+
+    try:
+        # Prepare the message
+        message = {
+            'role': 'user',
+            'content': prompt_text,
         }
-        try:
-            with open(state_file, 'w') as f:
-                json.dump(state, f)
-        except Exception as e:
-            print(f"  [API Key] Failed to save state: {e}")
+        if images:
+            message['images'] = images
 
-    def _load_keys(self) -> list[str]:
-        """Loads keys from the GOOGLE_API_KEYS environment variable."""
-        keys_str = os.getenv("GOOGLE_API_KEYS")
-        if not keys_str:
-            return []
-        return [key.strip() for key in keys_str.split(',') if key.strip()]
+        # Call Ollama
+        response = ollama.chat(
+            model=DEFAULT_MODEL,
+            messages=[message],
+            options=options
+        )
+        
+        # Wrap response to match loosely what Gemini provided (an object with .text)
+        class MockGeminiResponse:
+            def __init__(self, content):
+                self.text = content
+                self.candidates = [type('MockCandidate', (), {'content': type('MockContent', (), {'parts': [type('MockPart', (), {'text': content})]})})]
 
-    def get_current_key(self) -> str:
-        """Returns the current API key."""
-        return self.keys[self.current_key_index]
+        return MockGeminiResponse(response['message']['content'])
 
-    def rotate_key(self) -> bool:
-        """
-        Rotates to the next non-exhausted key.
-        If all keys are exhausted, resets exhausted list and starts from index 0.
-        Returns True if a new key is available, False if reset to start.
-        """
-        print(f"  [API Key] Rotating from key index {self.current_key_index} due to quota limit.")
-        self.exhausted_keys.add(self.current_key_index)
-
-        # Find next non-exhausted key
-        start_index = self.current_key_index
-        while True:
-            self.current_key_index = (self.current_key_index + 1) % len(self.keys)
-            if self.current_key_index not in self.exhausted_keys:
-                print(f"  [API Key] Switched to key index: {self.current_key_index}")
-                self._save_state()
-                return True
-            if self.current_key_index == start_index:
-                # All keys exhausted
-                print("  [API Key Warning] All keys exhausted. Resetting and starting from index 0.")
-                self.exhausted_keys.clear()
-                self.current_key_index = 0
-                self._save_state()
-                return False
-
-# Create a single, global instance to be used across the application
-key_manager = ApiKeyManager()
-
-# Register atexit handler to save state when program exits
-atexit.register(key_manager._save_state)
-
-async def gemini_api_call_with_rotation(prompt_content, generation_config, **kwargs):
-    """
-    A centralized wrapper for Gemini API calls that handles 429 errors by rotating API keys.
-    """
-    initial_key_index = key_manager.current_key_index
-    while True:
-        try:
-            # Configure the API key for the current attempt
-            current_key = key_manager.get_current_key()
-            genai.configure(api_key=current_key)  # type: ignore
-            model = genai.GenerativeModel("gemini-2.5-flash")  # type: ignore
-
-            response = await model.generate_content_async(
-                prompt_content,
-                generation_config=generation_config,
-                **kwargs # Pass through any extra arguments like safety_settings
-            )
-            return response
-
-        except Exception as e: # Catch all exceptions
-            # Check if the error is a quota error
-            if "429" in str(e) and "quota" in str(e).lower():
-                print(f"    [Gemini Error] Quota exceeded for key index {key_manager.current_key_index}.")
-
-                # Rotate key and check if we've tried all keys
-                if not key_manager.rotate_key(): # and key_manager.current_key_index == initial_key_index:
-                    # We have tried all keys and are back to the start.
-                    # Wait for a minute before trying the first key again.
-                    print("    [API Key] All keys are rate-limited. Waiting for 60 seconds...")
-                    await asyncio.sleep(180)
-                # After rotating (or waiting), continue the loop to retry the request
-                continue
-            elif "403" in str(e) and "leaked" in str(e).lower():
-                print(f"    [Gemini Error] API key index {key_manager.current_key_index} blocked.")
-
-                # Rotate key and check if we've tried all keys
-                if not key_manager.rotate_key(): # and key_manager.current_key_index == initial_key_index:
-                    # We have tried all keys and are back to the start.
-                    # Wait for a minute before trying the first key again.
-                    print("    [API Key] All keys are rate-limited. Waiting for 60 seconds...")
-                    await asyncio.sleep(180)
-                # After rotating (or waiting), continue the loop to retry the request
-                continue
-            elif "404" in str(e) and "not found" in str(e).lower():
-                print(f"    [Gemini Error] Model not found: {e}. Please check the model name in api_key_manager.py.")
-                # Break loop to avoid infinite 404s
-                raise e
-            else:
-                # It's a different, non-quota error, so we re-raise it to be handled by the caller.
-                # This breaks the infinite loop.
-                raise e
+    except Exception as e:
+        print(f"    [Ollama Error] Failed to generate content: {e}")
+        return None

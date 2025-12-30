@@ -220,6 +220,14 @@ class BettingMarkets:
         if not predictions:
             return {}
 
+    @staticmethod
+    def select_best_market(predictions: Dict[str, Dict], risk_preference: str = "medium") -> Dict[str, Any]:
+        """
+        Select the best market with strict logical consistency between Reason and Prediction.
+        """
+        if not predictions:
+            return {}
+
         def format_selection(market: Dict, key_name: str) -> Dict[str, Any]:
             return {
                 "market_key": key_name,
@@ -233,7 +241,7 @@ class BettingMarkets:
         # 1. Draw Logic -> Double Chance
         dc = predictions.get("double_chance")
         if dc and ("draw" in dc.get("reason", "").lower() or "close xg" in dc.get("reason", "").lower()):
-            if dc["confidence_score"] > 0.70:
+            if dc["confidence_score"] > 0.65: # Lowered threshold to catch more DC opportunities
                 return format_selection(dc, "logical_override_draw")
 
         # 2. Goals Logic -> Over / BTTS
@@ -257,6 +265,18 @@ class BettingMarkets:
             if over15 and over15["confidence_score"] > 0.7:
                  return format_selection(over15, "logical_override_goals_safe")
 
+        # --- STRUCTURAL PREFERENCE: AVOID "BTTS NO" ---
+        # If no goal reason exists, we might tend towards Under/BTTS No.
+        # BUT user prefers Double Chance (Team or Draw) over risky "BTTS No".
+        
+        # Check if we have a valid Double Chance that isn't just "Team A or Team B" (12)
+        has_directional_dc = False
+        if dc and " or " in dc["market_prediction"]:
+            # Check it's not the "12" bet (Home or Away)
+            pred = dc["market_prediction"]
+            teams = pred.split(" or ")
+            if len(teams) == 2 and teams[1] == "Draw": # "Team or Draw"
+                has_directional_dc = True
 
         # --- STANDARD SELECTION ---
         # 1. Very High Confidence
@@ -265,8 +285,12 @@ class BettingMarkets:
             candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
             valid_candidates = []
             for c in candidates:
+                # Filter out contradictory "Under" if goals expected
                 if goals_reason and "under" in c["market_prediction"].lower():
                     continue 
+                # Downgrade "BTTS No" if we have a directional DC available
+                if "btts no" in c["market_prediction"].lower() and has_directional_dc:
+                     continue 
                 valid_candidates.append(c)
             
             if valid_candidates:
@@ -276,8 +300,9 @@ class BettingMarkets:
                 return format_selection(selected, "best_safe" if best_safe else "best_high_conf")
 
         # 2. Safety First
+        # Explicitly removed 'btts' from consideration here
         safe_markets_keys = ["double_chance", "over_1.5", "draw_no_bet", "home_over_0.5", "away_over_0.5"]
-        safe_candidates = [predictions[k] for k in safe_markets_keys if k in predictions and predictions[k]["confidence_score"] > 0.65]
+        safe_candidates = [predictions[k] for k in safe_markets_keys if k in predictions and predictions[k]["confidence_score"] > 0.60]
         
         if safe_candidates:
             safe_candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
@@ -287,8 +312,15 @@ class BettingMarkets:
                  return format_selection(safe, "safe_bet")
 
         # 3. Fallback
+        # Even in fallback, if top is BTTS No, try to swap for DC
         sorted_markets = sorted(predictions.values(), key=lambda x: x["confidence_score"], reverse=True)
         if sorted_markets:
-            return format_selection(sorted_markets[0], "fallback")
+            top = sorted_markets[0]
+            if "btts no" in top["market_prediction"].lower() and has_directional_dc:
+                # Swap to DC if available and decent
+                if dc["confidence_score"] > 0.55:
+                    return format_selection(dc, "fallback_swap_dc")
+            
+            return format_selection(top, "fallback")
             
         return {}

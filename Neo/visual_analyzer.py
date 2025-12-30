@@ -10,8 +10,6 @@ import traceback
 import re
 from typing import Dict, Any, List, Optional
 
-from google.generativeai.types import GenerationConfig, HarmBlockThreshold, HarmCategory
-
 from .utils import clean_json_response
 from Helpers.Neo_Helpers.Managers.api_key_manager import gemini_api_call_with_rotation
 from Helpers.Neo_Helpers.Managers.db_manager import knowledge_db, save_knowledge
@@ -456,7 +454,7 @@ class VisualAnalyzer:
 
             response = await gemini_api_call_with_rotation(
                 [prompt, {"inline_data": {"mime_type": "image/png", "data": img_data}}],
-                generation_config=GenerationConfig(temperature=0.1),  # type: ignore
+                generation_config={"temperature": 0.1},  # type: ignore
             )
 
             # Safe extraction logic

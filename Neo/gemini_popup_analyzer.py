@@ -7,9 +7,6 @@ import base64
 import json
 from typing import Dict, Any, Optional
 
-from google.generativeai.types import GenerationConfig, HarmBlockThreshold, HarmCategory
-
-from Helpers.Neo_Helpers.Managers.api_key_manager import gemini_api_call_with_rotation
 from Helpers.Neo_Helpers.Managers.api_key_manager import gemini_api_call_with_rotation
 from Helpers.Neo_Helpers.Managers.db_manager import knowledge_db
 
@@ -38,7 +35,7 @@ def clean_json_response(response_text: str) -> str:
 
 
 class GeminiPopupAnalyzer:
-    """AI-powered popup analysis using Gemini Vision API"""
+    """AI-powered popup analysis using local Ollama model"""
 
     def __init__(self):
         self.analysis_timeout = 30000  # 30 seconds
@@ -48,7 +45,7 @@ class GeminiPopupAnalyzer:
                           screenshot_path: Optional[str] = None,
                           context: str = "generic") -> Dict[str, Any]:
         """
-        Analyze popup using Gemini AI vision analysis
+        Analyze popup using AI vision analysis
 
         Args:
             page: Playwright page object
@@ -73,19 +70,14 @@ class GeminiPopupAnalyzer:
             # Create context-aware prompt
             prompt = self._create_analysis_prompt(html_content, context)
 
-            # Call Gemini API
+            # Call API (redirected to Ollama)
             response = await gemini_api_call_with_rotation(
                 [prompt, {"inline_data": {"mime_type": "image/png", "data": img_data}}],
-                generation_config=GenerationConfig(
-                    temperature=0.1,  # Low temperature for consistent analysis
-                    response_mime_type="application/json"
-                ),
-                safety_settings={
-                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                generation_config={
+                    "temperature": 0.1,
+                    "response_mime_type": "application/json"
                 },
+                # Safety settings ignored by Ollama implementation
                 timeout=self.analysis_timeout
             )
 
