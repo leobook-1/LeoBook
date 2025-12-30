@@ -76,3 +76,7 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+
+# Mind (AI Models & Data)
+Mind/
+!Mind/start_server.bat
