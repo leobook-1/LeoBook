@@ -49,11 +49,9 @@ class VisualAnalyzer:
         print(f"    [AI INTEL] Capturing page state for '{context_key}'...")
         await log_page_html(page, context_key)
 
-        # Step 1: Get Visual Context
-        ui_visual_context = await VisualAnalyzer.get_visual_ui_analysis(page, context_key)  # This now uses the screenshot taken above
-        if not ui_visual_context:
-            print(f"    [AI INTEL] Visual analysis failed for '{context_key}'. Skipping AI selector generation.")
-            return
+        # Step 1: Skip Visual Analysis (HTML Only Mode)
+        print(f"    [AI INTEL] Defaulting to HTML-only analysis...")
+        ui_visual_context = "NO VISUAL CONTEXT AVAILABLE. ANALYZE HTML DOM ONLY."
 
         from pathlib import Path
         from Helpers.utils import LOG_DIR
@@ -492,7 +490,7 @@ class VisualAnalyzer:
                 print(f"    [VISUAL WARNING] Local Qwen failed ({e}). Falling back to Cloud Gemini...")
 
             # Fallback: Google Gemini
-            response = await gemini_api_call_with_rotation(
+            response = gemini_api_call_with_rotation(
                 [prompt, {"inline_data": {"mime_type": "image/png", "data": img_data}}],
                 generation_config={"temperature": 0.1},  # type: ignore
             )
@@ -556,10 +554,11 @@ class VisualAnalyzer:
         """Map visual UI elements to CSS selectors using Gemini"""
 
         prompt = f"""
-        You are an elite front-end reverse-engineer tasked with mapping every visible UI element from a screenshot to a precise, working CSS selector using the provided HTML.
+        You are an elite front-end reverse-engineer tasked with mapping UI elements to CSS selectors using ONLY the provided HTML source.
         You have two responsibilities:
         1. Map critical Flashscore/Football.com elements using EXACT predefined keys
-        2. Map all other visible elements using a rigid, predictable naming convention
+        2. Map all other relevant elements using a rigid, predictable naming convention
+        
         CRITICAL RULES — FOLLOW EXACTLY:
         ### 1. MANDATORY CORE ELEMENTS (Use These Exact Keys If Present)
         Important: {focus}
@@ -916,7 +915,7 @@ class VisualAnalyzer:
 
         prompt_tail = f"""
         ### INPUT
-        --- VISUAL INVENTORY ---
+        --- INSTRUCTION ---
         {ui_visual_context}
         --- CLEANED HTML SOURCE ---
         {html_content}
