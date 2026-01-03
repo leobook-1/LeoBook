@@ -2999,3 +2999,28 @@ Call log:
 Call log:
   - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
 
+2026-01-03T13:50:55.180714 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Target page, context or browser has been closed
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-03T13:50:55.183015 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Target page, context or browser has been closed
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-03T13:50:55.184465 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Target page, context or browser has been closed
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-03T13:50:55.184804 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Target page, context or browser has been closed
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-03T13:50:55.185037 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Target page, context or browser has been closed
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-03T13:51:00.194248 [MEDIUM] review_task_error: Review failed for fDWeDwvH: Page.goto: Connection closed while reading from the driver
+2026-01-03T13:51:00.194489 [MEDIUM] review_task_error: Review failed for GjJ7GNGD: Page.goto: Connection closed while reading from the driver
+2026-01-03T13:51:00.194728 [MEDIUM] review_task_error: Review failed for 2moK475l: Page.goto: Connection closed while reading from the driver
+2026-01-03T13:51:00.194929 [MEDIUM] review_task_error: Review failed for tS7ca2CE: Page.goto: Connection closed while reading from the driver
+2026-01-03T13:51:00.195175 [MEDIUM] review_task_error: Review failed for lYKByaK7: Page.goto: Connection closed while reading from the driver
