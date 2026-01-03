@@ -1,0 +1,7 @@
+2026/01/01-15:25:19.092 180c Reusing MANIFEST C:\Users\Admin\Desktop\ProProjection\LeoBook\DB\ChromeData\Default\IndexedDB\https_www.football.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/01/01-15:25:19.092 180c Recovering log #4
+2026/01/01-15:25:19.341 180c Reusing old log C:\Users\Admin\Desktop\ProProjection\LeoBook\DB\ChromeData\Default\IndexedDB\https_www.football.com_0.indexeddb.leveldb/000004.log 
+2026/01/01-15:25:21.263 12c8 Level-0 table #8: started
+2026/01/01-15:25:21.741 12c8 Level-0 table #8: 9077 bytes OK
+2026/01/01-15:25:22.318 12c8 Delete type=0 #4
+2026/01/01-15:25:22.318 180c Manual compaction at level-0 from '\x00\x05\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x06\x00\x00\x00' @ 0 : 0; will stop at (end)

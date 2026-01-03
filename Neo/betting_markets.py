@@ -135,20 +135,7 @@ class BettingMarkets:
                 "reason": f"{away_team} clear favorite"
             }
 
-        # 4. BTTS (Both Teams To Score)
-        # Boost BTTS if "scores 2+ often" appears for both or reasoning suggests high goals
-        btts_conf = btts_prob if btts_prob > 0.5 else 1 - btts_prob
-        if any("scores 2+" in r for r in reasoning) and btts_prob > 0.45:
-             btts_conf = max(btts_conf, 0.75) # Boost
-        
-        predictions["btts"] = {
-            "market_type": "Both Teams To Score (BTTS)",
-            "market_prediction": "BTTS Yes" if btts_prob > 0.5 else "BTTS No",
-            "confidence_score": btts_conf,
-            "reason": f"BTTS probability: {btts_prob:.2f}"
-        }
-
-        # 5. Over/Under Markets
+        # 4. Over/Under Markets
         # Penalize Under 2.5 if reasoning says "scores 2+ often"
         under_penalty = 1.0
         if any("scores 2+" in r for r in reasoning):
@@ -178,7 +165,7 @@ class BettingMarkets:
                 "reason": f"Low goal expectation: {home_xg + away_xg:.1f}"
             }
 
-        # 6. Team Goals (Safe Options)
+        # 5. Team Goals (Safe Options)
         if home_xg > 1.3:
             predictions["home_over_0.5"] = {
                 "market_type": "Home Team Goals",
@@ -193,6 +180,19 @@ class BettingMarkets:
                 "confidence_score": 0.85, 
                 "reason": f"{away_team} expected to score"
             }
+
+        # 6. BTTS (Both Teams To Score) (Risky)
+        # Boost BTTS if "scores 2+ often" appears for both or reasoning suggests high goals
+        btts_conf = btts_prob if btts_prob > 0.5 else 1 - btts_prob
+        if any("scores 2+" in r for r in reasoning) and btts_prob > 0.45:
+             btts_conf = max(btts_conf, 0.75) # Boost
+        
+        predictions["btts"] = {
+            "market_type": "Both Teams To Score (BTTS)",
+            "market_prediction": "BTTS Yes" if btts_prob > 0.5 else "BTTS No",
+            "confidence_score": btts_conf,
+            "reason": f"BTTS probability: {btts_prob:.2f}"
+        }
 
         # 7. Winner and BTTS (Risky)
         if home_score > away_score + 2 and btts_prob > 0.6:

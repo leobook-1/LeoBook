@@ -2887,3 +2887,115 @@ Call log:
 Call log:
   - waiting for locator("div.detailScore__wrapper > span:nth-child(3)").first
 
+2026-01-01T22:56:29.652823 [MEDIUM] review_task_error: Review failed for M53Ox0KH: Page.goto: net::ERR_SOCKET_NOT_CONNECTED at https://www.flashscore.com/match/football/al-ahli-tCs21SDo/al-hidd-GYVW06rb/?mid=M53Ox0KH
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/al-ahli-tCs21SDo/al-hidd-GYVW06rb/?mid=M53Ox0KH", waiting until "domcontentloaded"
+
+2026-01-01T22:56:29.734331 [MEDIUM] review_task_error: Review failed for nwrNnqJG: Page.goto: net::ERR_SOCKET_NOT_CONNECTED at https://www.flashscore.com/match/football/al-faisaly-AsIgIB3d/al-raed-WfHC8geK/?mid=nwrNnqJG
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/al-faisaly-AsIgIB3d/al-raed-WfHC8geK/?mid=nwrNnqJG", waiting until "domcontentloaded"
+
+2026-01-01T22:56:29.739683 [MEDIUM] review_task_error: Review failed for b1k7dQs3: Page.goto: net::ERR_SOCKET_NOT_CONNECTED at https://www.flashscore.com/match/football/chesterfield-dQIMIN5n/oldham-O4voiHlk/?mid=b1k7dQs3
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/chesterfield-dQIMIN5n/oldham-O4voiHlk/?mid=b1k7dQs3", waiting until "domcontentloaded"
+
+2026-01-01T22:56:29.817176 [MEDIUM] review_task_error: Review failed for pImFf4CF: Page.goto: net::ERR_SOCKET_NOT_CONNECTED at https://www.flashscore.com/match/football/bristol-rovers-GILi6JC9/shrewsbury-EqfQ6qK4/?mid=pImFf4CF
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/bristol-rovers-GILi6JC9/shrewsbury-EqfQ6qK4/?mid=pImFf4CF", waiting until "domcontentloaded"
+
+2026-01-01T22:56:29.823643 [MEDIUM] review_task_error: Review failed for vJ5mxddl: Page.goto: net::ERR_SOCKET_NOT_CONNECTED at https://www.flashscore.com/match/football/gillingham-WvZyDeKk/swindon-xSloasB8/?mid=vJ5mxddl
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/gillingham-WvZyDeKk/swindon-xSloasB8/?mid=vJ5mxddl", waiting until "domcontentloaded"
+
+2026-01-01T23:13:44.751658 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-01T23:15:02.747464 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-01T23:16:28.450106 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-03T13:03:15.529116 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-03T13:04:46.890971 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-03T13:05:03.366885 [MEDIUM] review_task_error: Review failed for bocOuTT9: Page.goto: net::ERR_TIMED_OUT at https://www.flashscore.com/match/football/eibar-OEsEpExD/mirandes-48Z7G1Sf/?mid=bocOuTT9
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/eibar-OEsEpExD/mirandes-48Z7G1Sf/?mid=bocOuTT9", waiting until "domcontentloaded"
+
+2026-01-03T13:05:03.370473 [MEDIUM] review_task_error: Review failed for Wh6YUwQ1: Page.goto: net::ERR_TIMED_OUT at https://www.flashscore.com/match/football/cwmbran-celtic-Kxaa5wpB/treowen-K84M4JUB/?mid=Wh6YUwQ1
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/cwmbran-celtic-Kxaa5wpB/treowen-K84M4JUB/?mid=Wh6YUwQ1", waiting until "domcontentloaded"
+
+2026-01-03T13:05:04.688868 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
+2026-01-03T13:05:24.880777 [MEDIUM] review_task_error: Review failed for 0CIadTvg: Page.goto: net::ERR_TIMED_OUT at https://www.flashscore.com/match/football/lens-IBmris38/toulouse-MLmY2yB1/?mid=0CIadTvg
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/lens-IBmris38/toulouse-MLmY2yB1/?mid=0CIadTvg", waiting until "domcontentloaded"
+
+2026-01-03T13:05:38.737638 [MEDIUM] review_task_error: Review failed for bocOuTT9: Page.goto: net::ERR_TIMED_OUT at https://www.flashscore.com/match/football/eibar-OEsEpExD/mirandes-48Z7G1Sf/?mid=bocOuTT9
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/eibar-OEsEpExD/mirandes-48Z7G1Sf/?mid=bocOuTT9", waiting until "domcontentloaded"
+
+2026-01-03T13:05:38.746680 [MEDIUM] review_task_error: Review failed for Wh6YUwQ1: Page.goto: net::ERR_TIMED_OUT at https://www.flashscore.com/match/football/cwmbran-celtic-Kxaa5wpB/treowen-K84M4JUB/?mid=Wh6YUwQ1
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/cwmbran-celtic-Kxaa5wpB/treowen-K84M4JUB/?mid=Wh6YUwQ1", waiting until "domcontentloaded"
+
+2026-01-03T13:06:05.414885 [MEDIUM] review_task_error: Review failed for 0CIadTvg: Page.goto: net::ERR_TIMED_OUT at https://www.flashscore.com/match/football/lens-IBmris38/toulouse-MLmY2yB1/?mid=0CIadTvg
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/lens-IBmris38/toulouse-MLmY2yB1/?mid=0CIadTvg", waiting until "domcontentloaded"
+
+2026-01-03T13:06:05.908668 [MEDIUM] review_task_error: Review failed for pdYpvr3F: Page.goto: Timeout 180000ms exceeded.
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/newport-city-OELAnACL/trethomas-bluebirds-SljkUvhG/?mid=pdYpvr3F", waiting until "domcontentloaded"
+
+2026-01-03T13:06:09.824581 [MEDIUM] review_task_error: Review failed for bocOuTT9: Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://www.flashscore.com/match/football/eibar-OEsEpExD/mirandes-48Z7G1Sf/?mid=bocOuTT9
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/eibar-OEsEpExD/mirandes-48Z7G1Sf/?mid=bocOuTT9", waiting until "domcontentloaded"
+
+2026-01-03T13:06:09.894078 [MEDIUM] review_task_error: Review failed for Wh6YUwQ1: Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://www.flashscore.com/match/football/cwmbran-celtic-Kxaa5wpB/treowen-K84M4JUB/?mid=Wh6YUwQ1
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/cwmbran-celtic-Kxaa5wpB/treowen-K84M4JUB/?mid=Wh6YUwQ1", waiting until "domcontentloaded"
+
+2026-01-03T13:06:13.395154 [MEDIUM] review_task_error: Review failed for joonafqh: Page.goto: net::ERR_NETWORK_CHANGED at https://www.flashscore.com/match/football/forte-C2xKyq0a/mirassol-dnPuQaIE/?mid=joonafqh
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/forte-C2xKyq0a/mirassol-dnPuQaIE/?mid=joonafqh", waiting until "domcontentloaded"
+
+2026-01-03T13:06:14.436199 [MEDIUM] review_task_error: Review failed for ns2pzEpp: Page.goto: net::ERR_NAME_NOT_RESOLVED at https://www.flashscore.com/match/football/caerau-ely-hzAq4Yah/cardiff-draconians-veMNg5Y3/?mid=ns2pzEpp
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/caerau-ely-hzAq4Yah/cardiff-draconians-veMNg5Y3/?mid=ns2pzEpp", waiting until "domcontentloaded"
+
+2026-01-03T13:06:14.447292 [MEDIUM] review_task_error: Review failed for zidnlDHi: Page.goto: net::ERR_NAME_NOT_RESOLVED at https://www.flashscore.com/match/football/gil-vicente-CS0fFFd8/sporting-cp-tljXuHBC/?mid=zidnlDHi
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/gil-vicente-CS0fFFd8/sporting-cp-tljXuHBC/?mid=zidnlDHi", waiting until "domcontentloaded"
+
+2026-01-03T13:06:16.726338 [MEDIUM] review_task_error: Review failed for pdYpvr3F: Page.goto: net::ERR_QUIC_PROTOCOL_ERROR at https://www.flashscore.com/match/football/newport-city-OELAnACL/trethomas-bluebirds-SljkUvhG/?mid=pdYpvr3F
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/newport-city-OELAnACL/trethomas-bluebirds-SljkUvhG/?mid=pdYpvr3F", waiting until "domcontentloaded"
+
+2026-01-03T13:08:02.216277 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(3)").first
+
+2026-01-03T13:09:19.889966 [MEDIUM] review_task_error: Review failed for 8hxpSBDG: Page.goto: net::ERR_CONNECTION_RESET at https://www.flashscore.com/match/football/al-hilal-omdurman-Ior3fTEA/gicumbi-lWbeaW9A/?mid=8hxpSBDG
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/al-hilal-omdurman-Ior3fTEA/gicumbi-lWbeaW9A/?mid=8hxpSBDG", waiting until "domcontentloaded"
+
+2026-01-03T13:10:46.660962 [MEDIUM] review_task_error: Review failed for YLnuHzrB: Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://www.flashscore.com/match/football/al-nasr-lvWVs1Kj/sohar-EFY2qsJc/?mid=YLnuHzrB
+Call log:
+  - navigating to "https://www.flashscore.com/match/football/al-nasr-lvWVs1Kj/sohar-EFY2qsJc/?mid=YLnuHzrB", waiting until "domcontentloaded"
+
+2026-01-03T13:12:19.094260 [MEDIUM] score_extraction_error: Failed to extract score: Locator.inner_text: Target page, context or browser has been closed
+Call log:
+  - waiting for locator("div.detailScore__wrapper > span:nth-child(1)").first
+
