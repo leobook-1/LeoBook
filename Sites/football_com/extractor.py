@@ -202,6 +202,7 @@ async def validate_match_data(matches: List[Dict]) -> List[Dict]:
         if all(k in match for k in ['home', 'away', 'url', 'league']):
             # Basic validation
             if match['home'] and match['away'] and match['url']:
+                print(f"    [Validation] Valid match: {match}")
                 valid_matches.append(match)
         else:
             print(f"    [Validation] Skipping invalid match: {match}")
