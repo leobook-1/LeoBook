@@ -16,11 +16,15 @@ fi
 
 # 1. Try TAR.GZ first (newer releases), fallback to ZIP
 echo "Fetching latest llama.cpp release info..."
-LATEST_TAG=$(curl -s https://api.github.com/repos/ggerganov/llama.cpp/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)
-if [ -z "$LATEST_TAG" ]; then
-    echo "ERROR: Could not determine latest release tag! Falling back to known working version."
+if ! LATEST_TAG=$(curl -s --connect-timeout 10 https://api.github.com/repos/ggerganov/llama.cpp/releases/latest | grep '"tag_name"' | head -1 | cut -d '"' -f 4); then
+    echo "Warning: Could not fetch latest release from GitHub API. Falling back to known working version."
+    LATEST_TAG="b4458"
+elif [ -z "$LATEST_TAG" ]; then
+    echo "Warning: Empty release tag received. Falling back to known working version."
     LATEST_TAG="b4458"
 fi
+
+echo "Using llama.cpp release: $LATEST_TAG"
 
 # Try TAR.GZ first, then ZIP
 TAR_NAME="llama-${LATEST_TAG}-bin-ubuntu-x64.tar.gz"
