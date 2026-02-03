@@ -29,15 +29,63 @@ class SelectorManager:
         return knowledge_db.get(context, {}).get(element_key, "")
 
     @staticmethod
+    def get_selector_strict(context: str, element_key: str) -> str:
+        """
+        Strict accessor that raises an error if selector is missing.
+        """
+        selector = knowledge_db.get(context, {}).get(element_key)
+        if not selector:
+            raise ValueError(f"CRITICAL: Missing strict selector for '{element_key}' in context '{context}'. check knowledge.json")
+        return selector
+
+    @staticmethod
     async def get_selector_auto(page, context_key: str, element_key: str) -> str:
         """
-        CONSERVATIVE ACCESSOR:
-        Returns selector from DB without proactive validation or auto-healing.
-        Auto-healing only occurs when selectors are actually used and fail.
+        SMART ACCESSOR:
+        1. Checks if selector exists in DB.
+        2. Validates if selector is present on the current page.
+        3. If missing or invalid, AUTOMATICALLY triggers AI re-analysis and returns fresh selector.
         """
-        # Simple lookup - no validation, no healing
-        selector = knowledge_db.get(context_key, {}).get(element_key, "")
-        return str(selector)
+        # 1. Quick Lookup
+        selector = knowledge_db.get(context_key, {}).get(element_key)
+
+        # 2. Validation
+        is_valid = False
+        if selector:
+            # Wait up to 5s for the selector to be attached (DOM presence)
+            # Reduced timeout to prevent delays, use 'visible' for better reliability
+            try:
+                # 'visible' ensures it's both in DOM and visible, more reliable than 'attached'
+                await page.wait_for_selector(selector, state='visible', timeout=5000)
+                is_valid = True
+            except Exception:
+                # print(f"    [Selector Stale] '{element_key}' ('{selector}') not found after wait.")
+                is_valid = False
+
+        # 3. Auto-Healing
+        if not is_valid:
+            print(
+                f"    [Auto-Heal] Selector '{element_key}' in '{context_key}' invalid/missing. Initiating AI repair..."
+            )
+            # Import here to avoid circular imports
+            from .intelligence import analyze_page_and_update_selectors
+            
+            info = f"Selector '{element_key}' in '{context_key}' invalid/missing."
+            # A. Capture NEW Snapshot (Crucial for fresh analysis)
+            # Note: analyze_page_and_update_selectors handles the snapshot capturing
+            
+            # B. Run AI Analysis (Forces update of DB)
+            await analyze_page_and_update_selectors(page, context_key, force_refresh=True, info=info)
+
+            # C. Re-fetch
+            selector = knowledge_db.get(context_key, {}).get(element_key)
+
+            if selector:
+                print(f"    [Auto-Heal Success] New selector for '{element_key}': {selector}")
+            else:
+                print(f"    [Auto-Heal Failed] AI could not find '{element_key}' even after refresh.")
+
+        return str(selector) if selector else ""
 
     @staticmethod
     async def heal_selector_on_failure(page, context_key: str, element_key: str, failure_reason: str = "") -> str:

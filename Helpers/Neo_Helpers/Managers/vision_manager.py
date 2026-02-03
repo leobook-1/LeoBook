@@ -7,7 +7,7 @@ import base64
 from playwright.async_api import Page
 
 from Helpers.utils import LOG_DIR
-from Helpers.Neo_Helpers.Managers.api_key_manager import leo_api_call_with_rotation
+from Helpers.Neo_Helpers.Managers.api_key_manager import grok_api_call
 from Helpers.Neo_Helpers.Managers.prompt_manager import generate_dynamic_prompt
 
 
@@ -45,7 +45,7 @@ async def get_visual_ui_analysis(page: Page, context_key: str = "unknown") -> st
         except ValueError:  # Prompt not found
             prompt = generate_dynamic_prompt("ui_analysis", "vision")  # Fallback
 
-        response = await leo_api_call_with_rotation(
+        response = await grok_api_call(
             [prompt, image_data],
             generation_config={"temperature": 0.1}
         )

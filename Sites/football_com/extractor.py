@@ -16,23 +16,23 @@ from .navigator import hide_overlays
 
 async def extract_league_matches(page: Page, target_date: str) -> List[Dict]:
     """Iterates through all league headers, expands them, and extracts matches for a specific date."""
-    print("  [Harvest] Starting 'Expand & Harvest' sequence...")
+    # print("  [Harvest] Starting 'Expand & Harvest' sequence...")
     await hide_overlays(page)
     all_matches = []
     
-    league_header_sel = get_selector("fb_schedule_page", "league_header") or ".league-title-wrapper"
-    match_card_sel = get_selector("fb_schedule_page", "match_rows") or ".match-card-section.match-card"
-    match_url_sel = get_selector("fb_schedule_page", "match_url") or ".match-card > a.card-link"
-    league_title_sel = get_selector("fb_schedule_page", "league_title_link") or ".league-link"
+    league_header_sel = SelectorManager.get_selector_strict("fb_schedule_page", "league_section")
+    match_card_sel = SelectorManager.get_selector_strict("fb_schedule_page", "match_rows")
+    match_url_sel = SelectorManager.get_selector_strict("fb_schedule_page", "match_url")
+    league_title_sel = SelectorManager.get_selector_strict("fb_schedule_page", "league_title_link")
     
     # Match row specific selectors
-    home_team_sel = get_selector("fb_schedule_page", "match_row_home_team_name") or ".home-team-name"
-    away_team_sel = get_selector("fb_schedule_page", "match_row_away_team_name") or ".away-team-name"
-    time_sel = get_selector("fb_schedule_page", "match_row_time") or ".time"
+    home_team_sel = SelectorManager.get_selector_strict("fb_schedule_page", "match_row_home_team_name")
+    away_team_sel = SelectorManager.get_selector_strict("fb_schedule_page", "match_row_away_team_name")
+    time_sel = SelectorManager.get_selector_strict("fb_schedule_page", "match_row_time")
 
     try:
         league_headers = await page.locator(league_header_sel).all()
-        print(f"  [Harvest] Found {len(league_headers)} league headers.")
+        # print(f"  [Harvest] Found {len(league_headers)} league headers.")
 
         for i, header_locator in enumerate(league_headers):
             try:
@@ -45,7 +45,7 @@ async def extract_league_matches(page: Page, target_date: str) -> List[Dict]:
                 else:
                     league_text = f"Unknown League {i+1}"
                 
-                print(f"  -> Processing League {i+1}: {league_text}")
+                # print(f"  -> Processing League {i+1}: {league_text}")
 
                 if league_text.startswith("Simulated Reality League"):
                      print(f"    -> Skipping Simulated Reality League.")
@@ -127,7 +127,7 @@ async def extract_league_matches(page: Page, target_date: str) -> List[Dict]:
                          await page.locator(f"h4:text-is('{league_text}')").first.click(timeout=3000)
                      except:
                          pass
-                     await asyncio.sleep(0.5)
+                     await asyncio.sleep(5) # Increased to 5s for full loading
                      
                      # Re-evaluate
                      matches_container = await header_locator.evaluate_handle('(el) => el.nextElementSibling')
@@ -173,8 +173,8 @@ async def extract_league_matches(page: Page, target_date: str) -> List[Dict]:
                 # Result Handling
                 if matches_in_section:
                     all_matches.extend(matches_in_section)
-                    print(f"    -> {league_text}: Extracted {len(matches_in_section)} matches.")
-                    print(f"       Sample Match: {matches_in_section}")
+                    # print(f"    -> {league_text}: Extracted {len(matches_in_section)} matches.")
+                    # print(f"       Sample Match: {matches_in_section}")
                 else:
                     print(f"    -> {league_text}: No matches found in section after attempts.")
 
@@ -192,7 +192,7 @@ async def extract_league_matches(page: Page, target_date: str) -> List[Dict]:
     except Exception as e:
         print(f"  [Harvest] Overall harvesting error: {e}")
 
-    print(f"  [Harvest] Total matches found: {len(all_matches)}")
+    # print(f"  [Harvest] Total matches found: {len(all_matches)}")
     return all_matches
  
 

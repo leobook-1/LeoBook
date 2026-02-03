@@ -10,6 +10,27 @@ import re
 from typing import Dict, Any, List
 from Neo.intelligence import get_selector_auto, get_selector
 from Helpers.DB_Helpers.db_helpers import save_schedule_entry
+from Helpers.Site_Helpers.site_helpers import fs_universal_popup_dismissal
+import asyncio
+
+async def activate_h2h_tab(page: Page) -> bool:
+    """Activates the H2H tab, ensuring popups are dismissed first."""
+    tab_selector = get_selector("match_page", "h2h_tab") or "a[data-analytics-alias='h2h']"
+    try:
+        # Dismiss popups BEFORE clicking to avoid blockage
+        await fs_universal_popup_dismissal(page, "fs_match_page")
+
+        if await page.locator(tab_selector).is_visible(timeout=5000):
+            await page.click(tab_selector, force=True)
+            await page.wait_for_load_state("domcontentloaded")
+            await asyncio.sleep(2.0)
+            return True
+        else:
+             print(f"      [Extractor] H2H tab selector '{tab_selector}' not visible.")
+             return False
+    except Exception as e:
+        print(f"      [Extractor] Failed to activate H2H tab: {e}")
+        return False
 
 async def extract_h2h_data(page: Page, home_team_main: str, away_team_main: str, context: str = "h2h_tab") -> Dict[str, Any]:
     """
@@ -25,7 +46,7 @@ async def extract_h2h_data(page: Page, home_team_main: str, away_team_main: str,
         "h2h_section_mutual": get_selector(context, "h2h_section_mutual") or ".h2h__section:nth-of-type(3)",
         "h2h_section_title": get_selector(context, "h2h_section_title") or ".h2h__sectionHeader",
         "h2h_row_general": get_selector(context, "h2h_row_general") or ".h2h__row",
-        "h2h_row_link": get_selector(context, "h2h_row_link"),
+        "h2h_row_link": get_selector(context, "h2h_row_link") or "a", # Default to any anchor
         "h2h_row_date": get_selector(context, "h2h_row_date") or ".h2h__date",
         "h2h_row_league_icon": get_selector(context, "h2h_row_league_icon") or ".h2h__eventIcon",
         "h2h_row_participant_home": get_selector(context, "h2h_row_participant_home") or ".h2h__homeParticipant",

@@ -1,6 +1,6 @@
 # Leo.py: The central orchestrator for the LeoBook system.
 # This script initializes the system and runs the primary data processing,
-# and betting placement loops as defined in the Leo Handbook.
+# and betting placement loops as defined in the README.md.
 # It embodies the "observe, decide, act" loop.
 
 import asyncio
@@ -10,8 +10,9 @@ import subprocess
 import requests
 import time
 import platform
+import argparse
 from pathlib import Path
-from datetime import datetime as dt
+from datetime import datetime as dt, timedelta
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -187,18 +188,18 @@ async def main():
                 print(f"\n      --- LEO: Starting new cycle at {dt.now().strftime('%Y-%m-%d %H:%M:%S')} --- ")
 
                 # 0. Ensure AI Server is Running
-                start_ai_server()
+                #start_ai_server()
 
                 # --- PHASE 0: REVIEW (Observe past actions) ---
                 print("\n   [Phase 0] Checking for past matches to review...")
                 from Helpers.DB_Helpers.review_outcomes import run_review_process
-                await run_review_process(p)
+                #await run_review_process(p)
 
                 # Print prediction accuracy report
                 print("   [Phase 0] Analyzing prediction accuracy across all reviewed matches...")
                 from Helpers.DB_Helpers.prediction_accuracy import print_accuracy_report
-                print_accuracy_report()
-                print("   [Phase 0] Accuracy analysis complete.")
+                #print_accuracy_report()
+                #print("   [Phase 0] Accuracy analysis complete.")
 
                 # --- PHASE 1: ANALYSIS (Observe and Decide) ---
                 print("\n   [Phase 1] Starting analysis engine (Flashscore)...")
@@ -206,7 +207,7 @@ async def main():
 
                 # --- PHASE 2: BOOKING (Act) ---
                 print("\n   [Phase 2] Starting booking process (Football.com)...")
-                #await run_football_com_booking(p)
+                await run_football_com_booking(p)
 
                 # --- PHASE 3: SLEEP (The wait) ---
                 print("\n   --- LEO: Cycle Complete. ---")
@@ -219,10 +220,53 @@ async def main():
                 await asyncio.sleep(60) # Wait for 60 seconds before retrying
 
 
+async def main_offline_repredict():
+    """
+    Offline reprediction mode: Use stored data to repredict future matches.
+    """
+    from Sites.flashscore import run_flashscore_offline_repredict
+
+    print("    --- LEO: Offline Reprediction Mode ---      ")
+    # 1. Initialize all database files (CSVs)
+    init_csvs()
+
+    async with async_playwright() as p:
+        try:
+            print(f"\n      --- LEO: Starting offline reprediction at {dt.now().strftime('%Y-%m-%d %H:%M:%S')} --- ")
+
+            # 0. Ensure AI Server is Running
+            start_ai_server()
+
+            # --- PHASE 0: REVIEW (Observe past actions) ---
+            print("\n   [Phase 0] Checking for past matches to review...")
+            from Helpers.DB_Helpers.review_outcomes import run_review_process
+            await run_review_process(p)
+
+            # Print prediction accuracy report
+            print("   [Phase 0] Analyzing prediction accuracy across all reviewed matches...")
+            from Helpers.DB_Helpers.prediction_accuracy import print_accuracy_report
+            print_accuracy_report()
+            print("   [Phase 0] Accuracy analysis complete.")
+
+            # --- PHASE 1: OFFLINE REPREDICTION ---
+            print("\n   [Phase 1] Starting offline reprediction engine...")
+            await run_flashscore_offline_repredict(p)
+
+            print("\n   --- LEO: Offline Reprediction Complete. ---")
+
+        except Exception as e:
+            print(f"[ERROR] An unexpected error occurred in offline reprediction: {e}")
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="LeoBook Prediction System")
+    parser.add_argument('--offline-repredict', action='store_true',
+                       help='Run offline reprediction using stored data instead of scraping')
+    args = parser.parse_args()
+
     # Set a higher default timeout for Playwright operations
     os.environ["PLAYWRIGHT_TIMEOUT"] = str(PLAYWRIGHT_DEFAULT_TIMEOUT)
-    
+
     # --- Terminal Logging Setup ---
     TERMINAL_LOG_DIR = LOG_DIR / "Terminal"
     TERMINAL_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -235,9 +279,12 @@ if __name__ == "__main__":
     sys.stdout = Tee(original_stdout, log_file)
     sys.stderr = Tee(original_stderr, log_file)
 
-    # Run the main async function
+    # Run the appropriate async function
     try:
-        asyncio.run(main())
+        if args.offline_repredict:
+            asyncio.run(main_offline_repredict())
+        else:
+            asyncio.run(main())
     except KeyboardInterrupt:
         print("\n   --- LEO: Shutting down gracefully. ---")
     finally:

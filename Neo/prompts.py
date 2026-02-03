@@ -182,14 +182,14 @@ Be exhaustive but concise. Here are the elements of interest for this specific p
 """
 
 BASE_MAPPING_INSTRUCTIONS = """
-You are an elite front-end reverse-engineer. Map UI elements to CSS selectors using ONLY the provided HTML source.
+You are a specialized UI Automation Assistant. Your task is to map logical UI components to their corresponding CSS selectors based on the provided document structure.
 
 CRITICAL RULES:
 1. MANDATORY: Use EXACT keys provided in the list below.
-2. SELECTOR RULES: ID > Single Class > Simple Attribute.
-3. NO HARDCODED DATA: Don't use team names or scores in selectors.
-4. SIMPLEST possible selector. NO chains > 2 levels.
-5. Playwright compatible (No :contains, use :has-text if needed).
+2. SELECTOR RULES: Prefer ID > Data Attributes > Unique Class. Avoid brittle paths.
+3. DATA AGNOSTIC: Do not include dynamic content (scores, names, dates) in selectors.
+4. EFFICIENCY: Keep selectors as simple as possible. Avoid deep nesting.
+5. COMPATIBILITY: Standard CSS selectors only. Use :has-text() for Playwright when text is the only unique identifier.
 
 Return ONLY a valid JSON object: {"key": "selector"}
 """

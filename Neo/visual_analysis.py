@@ -10,6 +10,7 @@ import requests
 import os
 import json
 from .prompts import get_keys_for_context, BASE_VISUAL_INSTRUCTIONS
+from Helpers.Neo_Helpers.Managers.api_key_manager import ai_api_call
 
 
 async def get_visual_ui_analysis(page, context_key: str) -> str | None:
@@ -31,41 +32,25 @@ async def get_visual_ui_analysis(page, context_key: str) -> str | None:
         # 3. Build Prompt
         prompt = f"{BASE_VISUAL_INSTRUCTIONS}\n{keys_str}"
 
-        # 4. Local Leo AI Analysis
-        try:
-            print(f"    [VISUAL] Analyzing {context_key} UI with Local Leo AI...")
+        # 4. Multimodal AI Analysis
+        print(f"    [VISUAL] Analyzing {context_key} UI via AI API...")
+        
+        content = [
+            {"type": "text", "text": prompt},
+            {
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": img_data
+                }
+            }
+        ]
+        
+        response = await ai_api_call(content, generation_config={"temperature": 0.1})
 
-            def _run_local_vision():
-                return requests.post(
-                    os.getenv("LLM_API_URL", "http://127.0.0.1:8080/v1/chat/completions"),
-                    json={
-                        "messages": [
-                            {
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": prompt},
-                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
-                                ]
-                            }
-                        ],
-                        "temperature": 0.1,
-                        "max_tokens": 4096,
-                        "stream": False
-                    },
-                    timeout=180
-                )
-
-            local_resp = await asyncio.to_thread(_run_local_vision)
-
-            if local_resp.status_code == 200:
-                content = local_resp.json()['choices'][0]['message']['content']
-                return content
-            else:
-                print(f"    [VISUAL ERROR] Local Leo AI returned status {local_resp.status_code}")
-                return None
-
-        except Exception as e:
-            print(f"    [VISUAL ERROR] Local Leo AI failed ({e})")
+        if response and hasattr(response, 'text') and response.text:
+            return response.text
+        else:
+            print(f"    [VISUAL ERROR] AI API returned no text response")
             return None
 
     except Exception as e:

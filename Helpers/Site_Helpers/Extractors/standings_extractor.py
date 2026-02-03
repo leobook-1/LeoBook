@@ -5,8 +5,29 @@ from playwright.async_api import Page, TimeoutError, ElementHandle
 import re
 from typing import Dict, Any, List
 from Neo.intelligence import get_selector_auto, get_selector
+from Helpers.Site_Helpers.site_helpers import fs_universal_popup_dismissal
+import asyncio
 
-async def extract_standings_data(page: Page, context: str = "standings_tab") -> Dict[str, Any]:
+async def activate_standings_tab(page: Page, match_label: str = "Unknown") -> bool:
+    """Activates the Standings tab, ensuring popups are dismissed first."""
+    tab_selector = get_selector("match_page", "standings_tab") or "a[data-analytics-alias='stats-detail']"
+    try:
+        # Dismiss popups BEFORE clicking to avoid blockage
+        await fs_universal_popup_dismissal(page, "fs_match_page")
+
+        if await page.locator(tab_selector).is_visible(timeout=5000):
+            await page.click(tab_selector, force=True)
+            await page.wait_for_load_state("domcontentloaded")
+            await asyncio.sleep(2.0)
+            return True
+        else:
+             print(f"      [Extractor] Standings tab not visible for {match_label}.")
+             return False
+    except Exception as e:
+        print(f"      [Extractor] Failed to activate Standings tab for {match_label}: {e}")
+        return False
+
+async def extract_standings_data(page: Page, match_label: str = "Unknown", context: str = "standings_tab") -> Dict[str, Any]:
     """
     Extracts essential standings data: position, team, stats, and league info.
     """

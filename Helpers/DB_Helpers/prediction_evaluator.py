@@ -56,7 +56,14 @@ def evaluate_prediction(prediction: str, actual_score: str, home_team: str, away
         elif team_name.lower() == away_team_lower:
             return away_goals >= home_goals  # Away win or draw
 
-    # 3. Draw No Bet: "Team" (where prediction is just the team name)
+    # 3. Draw No Bet: "Team to win (DNB)" or "Team" (where prediction is just the team name)
+    if prediction_str.endswith(" to win (DNB)"):
+        team_name = prediction_str.replace(" to win (DNB)", "").strip()
+        if team_name.lower() == home_team_lower:
+            return home_goals > away_goals
+        elif team_name.lower() == away_team_lower:
+            return away_goals > home_goals
+
     if prediction_str == home_team:
         return home_goals > away_goals
     if prediction_str == away_team:

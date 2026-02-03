@@ -50,6 +50,9 @@ def get_market_option(prediction: str, home_team: str, away_team: str) -> str:
     if 'under' in pred_lower and '2.5' in pred_lower:
         return "Under 2.5"
         
+    if '(dnb)' in pred_lower:
+        return "Draw No Bet"
+
     if '2-3 goals' in pred_lower:
         return "2-3 Goals"
 

@@ -12,7 +12,7 @@ from typing import Tuple, Optional, cast
 from playwright.async_api import Browser, BrowserContext, Page
 
 from Helpers.Site_Helpers.site_helpers import fb_universal_popup_dismissal
-from Neo.intelligence import get_selector, get_selector_auto, fb_universal_popup_dismissal as neo_popup_dismissal
+from Neo.intelligence import fb_universal_popup_dismissal as neo_popup_dismissal
 from Neo.selector_manager import SelectorManager
 from Helpers.constants import NAVIGATION_TIMEOUT, WAIT_FOR_LOAD_STATE_TIMEOUT
 from Helpers.utils import capture_debug_snapshot
@@ -30,7 +30,7 @@ async def log_page_title(page: Page, label: str = ""):
     """Logs the current page title and records it to the Page Registry."""
     try:
         title = await page.title()
-        print(f"  [Monitor] {label}: '{title}'")
+        # print(f"  [Monitor] {label}: '{title}'")
         # Vigilant Capture
         await PageMonitor.capture(page, label)
         return title
@@ -39,137 +39,105 @@ async def log_page_title(page: Page, label: str = ""):
         return ""
 
 
-async def load_or_create_session(context: BrowserContext) -> Tuple[BrowserContext, Page]:
-    """
-    Load session from valid persistent context or perform login if needed.
-    """
-    print("  [Auth] Using Persistent Context. Verifying session...")
+async def extract_balance(page: Page) -> float:
+    """Extract account balance with robustness for multiple calls."""
+    print("  [Money] Retrieving account balance...")
     
-    # Ensure we have a page
-    if not context.pages:
-        page = await context.new_page()
-    else:
-        page = context.pages[0]
-
-    # Navigate to check state
-    try:
-        # Smart Resume Check
-        current_url = page.url
-        print(f"  [Resume] Current URL: {current_url}")
-        
-        if "football.com/ng/m/sport/football" in current_url and current_url != "about:blank":
-             print("  [Resume] Already on Football.com football section. Verifying integrity...")
-             # Just log title and move on
-             await log_page_title(page, "Session Check (Smart Resume)")
-        elif page.url == "about:blank":
-             await page.goto("https://www.football.com/ng", wait_until='domcontentloaded', timeout=NAVIGATION_TIMEOUT)
-             await log_page_title(page, "Session Check")
-        else:
-             print("  [Resume] On unknown page. Navigating to home base...")
-             await page.goto("https://www.football.com/ng", wait_until='domcontentloaded', timeout=NAVIGATION_TIMEOUT)
-             await log_page_title(page, "Session Check")
-        
-        # await asyncio.sleep(2) # Reduced sleep
-
-
-        
-        # Validate session by checking for login elements
-        login_selectors = [
-            await get_selector_auto(page, "fb_global", "top_right_login"),
-            ".m-btn-login",  # Direct fallback
-            "#user-menu",
-            "div#user-menu"
-        ]
-
-        needs_login = False
-        for login_sel in login_selectors:
-            if login_sel and await page.locator(login_sel).count() > 0 and await page.locator(login_sel).is_visible():
-                needs_login = True
-                print(f"  [Auth] Found login button with selector: {login_sel}")
-                break
-
-        if needs_login:
-            print("  [Auth] Session expired or not logged in. Performing new login...")
-            await perform_login(page)
-        else:
-             print("  [Auth] Session checks out (Login button not visible).")
-
-    except Exception as e:
-        print(f"  [Auth] Session check failed: {e}. Attempting login flow...")
-        await perform_login(page)
-        
-    #await neo_popup_dismissal(page, "fb_generic", monitor_interval=90)  # Advanced popup handling
-    return context, page
+    # Retry loop for balance extraction
+    for attempt in range(3):
+        try:
+            # Refresh selector from manager in case of updates
+            balance_sel = SelectorManager.get_selector_strict("fb_match_page", "navbar_balance")
+            
+            if balance_sel:
+                # Wait for balance to be visible
+                try:
+                    await page.wait_for_selector(balance_sel, state="visible", timeout=5000)
+                except:
+                    pass
+                
+                if await page.locator(balance_sel).count() > 0:
+                    balance_text = await page.locator(balance_sel).first.inner_text(timeout=3000)
+                    # Remove currency symbols and formatting
+                    import re
+                    cleaned_text = re.sub(r'[^\d.]', '', balance_text)
+                    if cleaned_text:
+                        val = float(cleaned_text)
+                        # print(f"  [Money] Found balance: {val}")
+                        return val
+            
+            await asyncio.sleep(1)
+        except Exception as e:
+            print(f"  [Money Error] Attempt {attempt+1} failed: {e}")
+            await asyncio.sleep(1)
+            
+    print("  [Money] Failed to extract balance after retries.")
+    return 0.0
 
 
 async def perform_login(page: Page):
-    print("  [Navigation] Going to Football.com...")
+    #print("  [Navigation] Going to Football.com...")
     # Go directly to main mobile page
-    await page.goto("https://www.football.com/ng", wait_until='domcontentloaded', timeout=NAVIGATION_TIMEOUT)
-    await log_page_title(page, "Login Entry")
-    # await asyncio.sleep(2) # Reduced sleep
+    #await page.goto("https://www.football.com/ng", wait_until='domcontentloaded', timeout=NAVIGATION_TIMEOUT)
+    #await log_page_title(page, "Login Entry")
+    await asyncio.sleep(2) # Reduced sleep
 
     
     try:
-        # Click Top Login Button (if visible)
-        # Try multiple selectors for the login button since the site might change
-        login_selectors = [
-            await get_selector_auto(page, "fb_global", "top_right_login"),
-            await get_selector_auto(page, "fb_login_page", "top_right_login"),
-            ".m-btn-login",  # Direct fallback
-            "#user-menu",
-            "div#user-menu"
-        ]
+        
+        # Checking for login inputs directly as per previous logic structure
+        pass
 
-        print(f"  [Login] Trying login button selectors: {login_selectors}")
+        # print(f"  [Login] Trying login button selectors: {login_selectors}")
 
         # Debug: Print all clickable elements that might be login buttons
         try:
             all_buttons = await page.query_selector_all('button, a, div[role="button"], span[role="button"]')
-            print(f"  [Debug] Found {len(all_buttons)} potential clickable elements")
+            # print(f"  [Debug] Found {len(all_buttons)} potential clickable elements")
             for i, btn in enumerate(all_buttons[:10]):  # Check first 10
                 try:
                     text = await btn.inner_text()
                     classes = await btn.get_attribute('class') or ''
-                    if 'login' in text.lower() or 'login' in classes.lower() or 'user' in classes.lower():
-                        print(f"  [Debug] Potential login element {i}: text='{text}', class='{classes}'")
+                    # if 'login' in text.lower() or 'login' in classes.lower() or 'user' in classes.lower():
+                    #     print(f"  [Debug] Potential login element {i}: text='{text}', class='{classes}'")
                 except:
                     pass
         except Exception as e:
-            print(f"  [Debug] Could not enumerate buttons: {e}")
+            # print(f"  [Debug] Could not enumerate buttons: {e}")
+            pass
 
         login_clicked = False
-        for login_sel in login_selectors:
-            if not login_sel:
-                continue
+        login_sel = SelectorManager.get_selector_strict("fb_global", "login_button")
+        
+        if login_sel:
             try:
                 if await page.locator(login_sel).count() > 0 and await page.locator(login_sel).is_visible():
                     await page.locator(login_sel).click()
                     print(f"  [Login] Login button clicked using selector: {login_sel}")
                     login_clicked = True
                     await asyncio.sleep(3)
-                    break
             except Exception as e:
                 print(f"  [Login] Failed to click login with {login_sel}: {e}")
-                continue
 
-        # If all selectors failed, try a more aggressive search
+        # If selector failed, try predefined login element selectors from knowledge.json
         if not login_clicked:
-            print("  [Login] All selectors failed, trying aggressive search...")
+            print("  [Login] Selector failed, trying predefined login element selectors...")
             try:
-                # Try to find any element with login-related text
-                login_elements = [
-                    page.locator('text=/login/i'),
-                    page.locator('text=/sign in/i'),
-                    page.locator('[data-testid*="login"]'),
-                    page.locator('[aria-label*="login" i]'),
+                # Get predefined login element selectors from knowledge.json
+                login_element_selectors = [
+                    SelectorManager.get_selector_strict("fb_login_page", "login_input_username"),
+                    SelectorManager.get_selector_strict("fb_login_page", "login_input_password"),
+                    SelectorManager.get_selector_strict("fb_login_page", "login_button_submit"),
                 ]
 
-                for locator in login_elements:
+                # Remove empty selectors
+                login_element_selectors = [sel for sel in login_element_selectors if sel]
+
+                for selector in login_element_selectors:
                     try:
-                        if await locator.count() > 0:
-                            await locator.first.click()
-                            print("  [Login] Found and clicked login element via text/attribute search")
+                        if await page.locator(selector).count() > 0 and await page.locator(selector).is_visible():
+                            await page.locator(selector).first.click()
+                            print(f"  [Login] Found and clicked login element using predefined selector: {selector}")
                             login_clicked = True
                             await asyncio.sleep(3)
                             break
@@ -177,20 +145,16 @@ async def perform_login(page: Page):
                         continue
 
             except Exception as e:
-                print(f"  [Login] Aggressive search failed: {e}")
+                print(f"  [Login] Predefined selector search failed: {e}")
 
         if not login_clicked:
             print("  [Login] Warning: Could not find or click login button")
         
-        # Get Selectors via Auto-Heal
-        mobile_selector = await get_selector_auto(page, "fb_login_page", "center_input_mobile_number")
-        password_selector = await get_selector_auto(page, "fb_login_page", "center_input_password")
-        login_btn_selector = await get_selector_auto(page, "fb_login_page", "bottom_button_login")
-
-        # Fallbacks if Auto-Heal returns nothing valid
-        if not mobile_selector: mobile_selector = "input[type='tel'], input[placeholder*='Mobile']"
-        if not password_selector: password_selector = "input[type='password']"
-        if not login_btn_selector: login_btn_selector = "button:has-text('Login')"
+        
+        # Get Selectors via Strict Lookup
+        mobile_selector = SelectorManager.get_selector_strict("fb_login_page", "login_input_username")
+        password_selector = SelectorManager.get_selector_strict("fb_login_page", "login_input_password")
+        login_btn_selector = SelectorManager.get_selector_strict("fb_login_page", "login_button_submit")
 
         # Input Mobile Number
         print(f"  [Login] Filling mobile number using: {mobile_selector}")
@@ -235,24 +199,67 @@ async def perform_login(page: Page):
         raise
 
 
-async def extract_balance(page: Page) -> float:
-    """Extract account balance."""
-    print("  [Money] Retrieving account balance...")
-    # await asyncio.sleep(2) # Removed fixed sleep
-    try:
-        balance_sel = await get_selector_auto(page, "fb_match_page", "navbar_balance")
-        # await asyncio.sleep(1) # Reduced
+async def load_or_create_session(context: BrowserContext) -> Tuple[BrowserContext, Page]:
+    """
+    Load session from valid persistent context and perform Step 0 validation checks.
+    """
+    print("  [Auth] Using Persistent Context. Verifying session...")
 
-        if balance_sel and await page.locator(balance_sel).count() > 0:
-            balance_text = await page.locator(balance_sel).inner_text(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-            import re
-            cleaned_text = re.sub(r'[^\d.]', '', balance_text)
-            if cleaned_text:
-                #print(f"  [Money] Found balance: {balance_text}")
-                return float(cleaned_text)
+    await asyncio.sleep(3)
+    
+    # Ensure we have a page
+    if not context.pages:
+        page = await context.new_page()
+    else:
+        page = context.pages[0]
+
+    # Navigate to check state if needed
+    current_url = page.url
+    if "football.com" not in current_url or current_url == "about:blank":
+         # print("  [Auth] Initial navigation...")
+         await page.goto("https://www.football.com/ng", wait_until='domcontentloaded', timeout=NAVIGATION_TIMEOUT)
+    
+    # Step 0: Pre-Booking State Validation
+    print("  [Auth] Step 0: Validating session state...")
+
+    # A. Check Logged In Status
+    not_logged_in_sel = SelectorManager.get_selector_strict("fb_global", "not_logged_in_indicator")
+    if not_logged_in_sel:
+        try:
+             # If "not logged in" indicator is visible, we are logged out.
+             if await page.locator(not_logged_in_sel).count() > 0 and await page.locator(not_logged_in_sel).is_visible(timeout=3000):
+                 print("  [Auth] User is NOT logged in. Performing login flow...")
+                 await perform_login(page)
+             else:
+                 # Double check if "logged in" indicator is visible
+                 logged_in_sel = SelectorManager.get_selector_strict("fb_global", "logged_in_indicator")
+                 if logged_in_sel and await page.locator(logged_in_sel).count() > 0:
+                      pass # Valid
+                 else:
+                      # Ambiguous state, perform login to be safe logic could go here, 
+                      # but for now assume if 'not_logged_in' is absent, we are good.
+                      pass
+        except Exception as e:
+             # print(f"  [Auth] Login validation error: {e}")
+             # Attempt login if validation fails?
+             await perform_login(page)
+
+    # B. Check Balance
+    balance = await extract_balance(page)
+    print(f"  [Auth] Current Account Balance: {balance}")
+    if balance <= 10.0: # Minimum threshold warning
+         print("  [Warning] Low balance detected!")
+
+    # C. Aggressive Betslip Clear
+    try:
+        from .booker.slip import clear_bet_slip
+        await clear_bet_slip(page)
+    except ImportError:
+        print("  [Auth] Warning: Could not import clear_bet_slip for Step 0 check.")
     except Exception as e:
-        print(f"  [Money Error] Could not parse balance: {e}")
-    return 0.0
+        print(f"  [Auth] Failed to clear betslip checks: {e}")
+
+    return context, page
 
 
 async def hide_overlays(page: Page):
@@ -282,23 +289,25 @@ async def navigate_to_schedule(page: Page):
     # 1. Check if we are ALREADY there (Smart Resume)
     current_url = page.url
     if "/sport/football" in current_url and "live" not in current_url:
-        print("  [Navigation] Smart Resume: Already on a football schedule page.")
+        # print("  [Navigation] Smart Resume: Already on a football schedule page.")
         await hide_overlays(page)
         # Optional: check if Date filter is visible to confirm
-        date_filter = await get_selector_auto(page, "fb_schedule_page", "filter_dropdown_today")
+        date_filter = SelectorManager.get_selector_strict("fb_schedule_page", "filter_dropdown_today")
         if date_filter:
             if await page.locator(date_filter).count() > 0:
                  print("  [Navigation] Confirmed: Date filter is visible. No navigation needed.")
                  return
 
     # Try dynamic selector first
-    schedule_sel = await get_selector_auto(page, "fb_main_page", "full_schedule_button")
+    schedule_sel = SelectorManager.get_selector_strict("fb_main_page", "full_schedule_button")
 
     
     if schedule_sel:
         try:
             print(f"  [Navigation] Trying dynamic selector: {schedule_sel}")
             if await page.locator(schedule_sel).count() > 0:
+                print(f"  [Navigation] Clicked schedule button: {schedule_sel}")
+                await asyncio.sleep(5) # Allow full loading of schedule page
                 await page.locator(schedule_sel).first.click(timeout=5000)
                 await page.wait_for_load_state('domcontentloaded', timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
                 await log_page_title(page, "Schedule Page")
@@ -322,11 +331,11 @@ async def navigate_to_schedule(page: Page):
 async def select_target_date(page: Page, target_date: str) -> bool:
     """Select the target date in the schedule and validate using dynamic and robust selectors."""
 
-    print(f"  [Navigation] Selecting date: {target_date}")
+    # print(f"  [Navigation] Selecting date: {target_date}")
     await capture_debug_snapshot(page, "pre_date_select", f"Attempting to select {target_date}")
 
     # Dynamic Selector First
-    dropdown_sel = await get_selector_auto(page, "fb_schedule_page", "filter_dropdown_today")
+    dropdown_sel = SelectorManager.get_selector_strict("fb_schedule_page", "filter_dropdown_today")
     dropdown_found = False
     
     if dropdown_sel:
@@ -378,7 +387,7 @@ async def select_target_date(page: Page, target_date: str) -> bool:
 
         # Sort by League (Mandatory)
         try:
-            sort_sel = await get_selector_auto(page, "fb_schedule_page", "sort_dropdown")
+            sort_sel = SelectorManager.get_selector_strict("fb_schedule_page", "sort_dropdown")
             print(f"  [Debug] sort_sel: {sort_sel}")
             if sort_sel:
                 if await page.locator(sort_sel).count() > 0:
@@ -419,7 +428,7 @@ async def select_target_date(page: Page, target_date: str) -> bool:
     try:
         # Look for any match time elements to validate we're on the right date page
         # User Requirement: Use dynamically retrieved 'match_row_time'
-        time_sel = await get_selector_auto(page, "fb_schedule_page", "match_row_time")
+        time_sel = SelectorManager.get_selector_strict("fb_schedule_page", "match_row_time")
         
         if time_sel:
             try:
@@ -436,7 +445,7 @@ async def select_target_date(page: Page, target_date: str) -> bool:
                             sample_dt = dt.strptime(f"{date_part_str} {target_dt.year}", "%d %b %Y")
                             
                             if sample_dt.day == target_dt.day and sample_dt.month == target_dt.month:
-                                print(f"  [Navigation] Page validation successful - found match times {sample_time} matching {target_date}")
+                                # print(f"  [Navigation] Page validation successful - found match times {sample_time} matching {target_date}")
                                 return True
                             else:
                                 print(f"  [Navigation] Validation Mismatch: Page shows {sample_time}, expected {target_date}")

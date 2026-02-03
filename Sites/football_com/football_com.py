@@ -34,78 +34,48 @@ from Helpers.monitor import PageMonitor
 async def cleanup_chrome_processes():
     """Automatically terminate conflicting Chrome processes before launch."""
     try:
-        if sys.platform == "win32":
-            # Windows: Use taskkill
-            result = subprocess.run(
-                ["taskkill", "/F", "/IM", "chrome.exe", "/T"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                print("  [Cleanup] Terminated existing Chrome processes.")
-            else:
-                print("  [Cleanup] No Chrome processes found or cleanup not needed.")
+        if os.name == 'nt':
+            # Windows
+            subprocess.run(["taskkill", "/F", "/IM", "chrome.exe"], capture_output=True)
+            print("  [Cleanup] Cleaned up Chrome processes.")
         else:
             # Unix-like systems
-            result = subprocess.run(
-                ["pkill", "-f", "chrome"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                print("  [Cleanup] Terminated existing Chrome processes.")
-            else:
-                print("  [Cleanup] No Chrome processes found or cleanup not needed.")
+            subprocess.run(["pkill", "-f", "chrome"], capture_output=True)
+            print("  [Cleanup] Cleaned up Chrome processes.")
     except Exception as e:
         print(f"  [Cleanup] Warning: Could not cleanup Chrome processes: {e}")
 
 
 async def launch_browser_with_retry(playwright: Playwright, user_data_dir: Path, max_retries: int = 3):
     """Launch browser with retry logic and exponential backoff."""
-    base_timeout = 30000  # 30 seconds
-    backoff_multiplier = 1.5
+    base_timeout = 60000  # 60 seconds starting timeout
+    backoff_multiplier = 1.2
 
     for attempt in range(max_retries):
         timeout = int(base_timeout * (backoff_multiplier ** attempt))
         print(f"  [Launch] Attempt {attempt + 1}/{max_retries} with {timeout}ms timeout...")
 
         try:
-            # Enhanced Chrome arguments for better performance
+            # Simplified, faster arguments
             chrome_args = [
-                "--disable-dev-shm-usage",
                 "--no-sandbox",
+                "--disable-dev-shm-usage",
                 "--disable-gpu",
                 "--disable-extensions",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-background-timer-throttling",
-                "--disable-renderer-backgrounding",
-                "--disable-backgrounding-occluded-windows",
-                "--memory-pressure-off",
-                "--max_old_space_size=4096",
-                "--disable-features=VizDisplayCompositor",
-                "--disable-web-security",
-                "--disable-features=TranslateUI",
-                "--disable-ipc-flooding-protection",
-                "--disable-hang-monitor",
-                "--disable-prompt-on-repost",
-                "--force-color-profile=srgb",
-                "--metrics-recording-only",
-                "--no-first-run",
-                "--enable-automation",
                 "--disable-infobars",
-                "--disable-search-engine-choice-screen",
-                "--disable-sync",
-                "--no-service-autorun"
+                "--disable-blink-features=AutomationControlled",
+                "--no-first-run",
+                "--no-service-autorun",
+                "--password-store=basic"
             ]
 
             context = await playwright.chromium.launch_persistent_context(
                 user_data_dir=str(user_data_dir),
                 headless=False,
                 args=chrome_args,
-                viewport={'width': 375, 'height': 612},
-                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1",
+                ignore_default_args=["--enable-automation"],
+                viewport={'width': 375, 'height': 612}, # iPhone X
+                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
                 timeout=timeout
             )
 
@@ -142,7 +112,7 @@ async def run_football_com_booking(playwright: Playwright):
     Main function to handle Football.com login, match mapping, and bet placement.
     Orchestrates the entire booking workflow using modular components.
     """
-    print("\n--- Running Football.com Booking ---")
+    print("\n--- Running Football.com Booking (Phase 2) ---")
 
     # 1. Filter pending predictions
     pending_predictions = await filter_pending_predictions()
@@ -179,15 +149,6 @@ async def run_football_com_booking(playwright: Playwright):
     # Initial cleanup
     await cleanup_chrome_processes()
 
-    # Remove any existing lock files
-    lock_file = user_data_dir / "SingletonLock"
-    if lock_file.exists():
-        try:
-            lock_file.unlink()
-            print("  [System] Removed existing SingletonLock.")
-        except Exception as e:
-            print(f"  [Warning] Could not remove SingletonLock: {e}")
-
     context = None
     page = None
 
@@ -195,14 +156,11 @@ async def run_football_com_booking(playwright: Playwright):
         # Use optimized launch with retry logic
         context = await launch_browser_with_retry(playwright, user_data_dir, max_retries=3)
     except Exception as launch_e:
-        print(f"  [CRITICAL ERROR] Failed to launch browser after all retries: {launch_e}")
-        print("  [Action Required] Please ensure no other Chrome/Playwright instances are running.")
-        print("  [Info] Try 'taskkill /F /IM chrome.exe /T' if this persists.")
+        print(f"  [CRITICAL ERROR] Failed to launch browser: {launch_e}")
         return
 
     try:
         # 2. Load or create session
-        # Note: navigator now accepts context directly
         _, page = await load_or_create_session(context)
         await log_page_title(page, "Session Loaded")
         
@@ -224,78 +182,112 @@ async def run_football_com_booking(playwright: Playwright):
 
             print(f"\n--- Booking Process for Date: {target_date} ---")
 
-            # --- REGISTRY CHECK (Optimization) ---
+            # --- REGISTRY & HARVEST (Phase 2a) ---
+            print("\n   [Phase 2a: Harvest] Validating matches and extracting codes...")
+            
             cached_site_matches = load_site_matches(target_date)
             matched_urls = {} # fixture_id -> url
-            unmatched_predictions = []
+            verified_predictions = [] # List of preds that have a booking URL/code
 
+            # 2a-1: Identify Unmatched
+            unmatched_predictions = []
             for pred in day_predictions:
                 fid = str(pred.get('fixture_id'))
-                # Check if this prediction is already matched in our registry
                 cached_match = next((m for m in cached_site_matches if m.get('fixture_id') == fid), None)
                 
                 if cached_match and cached_match.get('url'):
                     if cached_match.get('booking_status') == 'booked':
-                         print(f"  [Registry] Prediction {fid} already booked. Skipping.")
+                         # Already fully booked? Reuse logic if needed
+                         pass
+                    
+                    matched_urls[fid] = cached_match.get('url')
+                    # Check if we have booked it (Harvested)
+                    if cached_match.get('booking_code'):
+                         print(f"    [Harvest] {fid} already has code: {cached_match.get('booking_code')}")
+                         verified_predictions.append(pred)
                     else:
-                         matched_urls[fid] = cached_match.get('url')
-                         print(f"  [Registry] Found cached URL for {fid}: {cached_match.get('url')}")
+                         # Has URL but NO code -> Needs Harvest
+                         unmatched_predictions.append(pred) # Re-purpose list for 'Needs Harvest'
                 else:
+                    # No URL -> Scrape -> Match -> Then Needs Harvest
                     unmatched_predictions.append(pred)
 
-            # If we still have unmatched predictions, we MUST scrape
-            if unmatched_predictions:
-                print(f"  [Registry] {len(unmatched_predictions)} predictions need matching. Scraping schedule...")
+            # 2a-2: Scrape & Match Missing URLs
+            # Filter distinct unconnected predictions
+            preds_needing_url = [p for p in unmatched_predictions if str(p.get('fixture_id')) not in matched_urls]
+            
+            if preds_needing_url:
+                print(f"    [Registry] {len(preds_needing_url)} predictions need URL matching...")
                 try:
                     await navigate_to_schedule(page)
-                    if not await select_target_date(page, target_date):
-                        print(f"  [Info] Date {target_date} not available. Skipping.")
-                        continue
+                    if await select_target_date(page, target_date):
+                        site_matches = await extract_league_matches(page, target_date)
+                        if site_matches:
+                            save_site_matches(site_matches)
+                            cached_site_matches = load_site_matches(target_date)
+                            
+                            new_mappings = await match_predictions_with_site(preds_needing_url, cached_site_matches)
+                            for fid, url in new_mappings.items():
+                                matched_urls[fid] = url
+                                # Update registry connection
+                                match_obj = next((m for m in cached_site_matches if m.get('url') == url), None)
+                                if match_obj:
+                                    update_site_match_status(match_obj['site_match_id'], 'pending', fixture_id=fid)
+                except Exception as e:
+                     print(f"    [Harvest Error] Match extraction failed: {e}")
 
-                    # Extract & Save to Registry
-                    site_matches = await extract_league_matches(page, target_date)
-                    if site_matches:
-                        save_site_matches(site_matches)
-                        # Refresh cache after save
-                        cached_site_matches = load_site_matches(target_date)
-                except Exception as nav_e:
-                    print(f"  [Error] Extraction failed for {target_date}: {nav_e}")
-                    continue
+            # 2a-3: Execute Single Booking (Harvest) for those with URL but no Code
+            preds_to_harvest = [p for p in day_predictions if str(p.get('fixture_id')) in matched_urls]
+            # Exclude already verified
+            preds_to_harvest = [p for p in preds_to_harvest if p not in verified_predictions]
 
+            print(f"    [Harvest] Attempting to harvest codes for {len(preds_to_harvest)} matches...")
+            
+            for pred in preds_to_harvest:
+                fid = str(pred.get('fixture_id'))
+                url = matched_urls.get(fid)
                 
+                # Construct composite match data
+                match_data = {
+                    'home_team': pred.get('home_team'), 
+                    'away_team': pred.get('away_team'),
+                    'url': url,
+                    # Pass prediction details for mapping
+                    'prediction': pred.get('prediction'),
+                    'home_team_id': pred.get('home_team_id'), 
+                    'away_team_id': pred.get('away_team_id')
+                }
 
-                # Run Matcher on the newly extracted/stored matches
-                new_mappings = await match_predictions_with_site(unmatched_predictions, cached_site_matches)
-                
-                # Update Registry with newly matched fixture_ids
-                for fid, url in new_mappings.items():
-                    matched_urls[fid] = url
-                    # Find which site match this belongs to and update it
-                    site_match = next((m for m in cached_site_matches if m.get('url') == url), None)
-                    if site_match:
-                        update_site_match_status(site_match['site_match_id'], 'pending', fixture_id=fid)
+                try:
+                    code, b_url = await book_single_match(page, match_data)
+                    
+                    if code:
+                        print(f"    [Harvest] Success! {fid} -> Code: {code}")
+                        # Update Registry
+                        # Find site_match_id
+                        match_obj = next((m for m in cached_site_matches if m.get('url') == url), None)
+                        if match_obj:
+                            update_site_match_status(
+                                match_obj['site_match_id'], 
+                                'harvested', 
+                                booking_code=code, 
+                                booking_url=b_url
+                            )
+                        verified_predictions.append(pred)
+                    else:
+                        print(f"    [Harvest] Failed to get code for {fid}")
+                except Exception as e:
+                    print(f"    [Harvest Error] {fid}: {e}")
 
-            # --- BET PLACEMENT ---
-            if matched_urls:
-                print(f"  [Action] Proceeding to book {len(matched_urls)} matched predictions...")
-                # We need to pass the full prediction dicts for those that are matched
-                to_book_preds = [p for p in day_predictions if str(p.get('fixture_id')) in matched_urls]
-                
-                # Execute Booking
-                # Note: place_bets_for_matches returns results or updates status
-                await place_bets_for_matches(page, matched_urls, to_book_preds, target_date)
-                
-                # Final Sync: Update our local registry if booking were successful
-                # (This is also handled inside place_bets_for_matches usually, 
-                # but we ensure the registry reflects the 'booked' status)
-                for fid in matched_urls.keys():
-                    # We check predictions.csv status to see if it changed to 'booked'
-                    # Or we could have place_bets_for_matches return the status.
-                    # For now, let's assume if it finished without error, we check later.
-                    pass 
+            # --- EXECUTE (Phase 2b) ---
+            print(f"\n   [Phase 2b: Execute] Building Accumulator with {len(verified_predictions)} verified selections...")
+            
+            if verified_predictions:
+                 # Execute Booking using the matched URLs (validated by Harvest)
+                 await place_bets_for_matches(page, matched_urls, verified_predictions, target_date)
             else:
-                print(f"  [Info] No matches to book for {target_date}.")
-                
+                 print("    [Execute] No verified matches to book.")
+
     except Exception as e:
         print(f"[FATAL BOOKING ERROR] {e}")
         if page:

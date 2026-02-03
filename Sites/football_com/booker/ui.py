@@ -27,7 +27,10 @@ async def handle_page_overlays(page: Page):
         except: pass
 
 async def robust_click(locator: Locator, page: Page, timeout: int = 5000):
-    """A resilient click function that handles overlays and retries via dispatch_event."""
+    """
+    A resilient click function that handles overlays and retries via dispatch_event.
+    Logs success/failure explicitely.
+    """
     try:
         await handle_page_overlays(page)
         if await locator.count() > 0:
@@ -36,16 +39,39 @@ async def robust_click(locator: Locator, page: Page, timeout: int = 5000):
             except: pass
             
             if await locator.is_visible(timeout=timeout):
+                # Attempt standard click
                 try:
                     await locator.click(timeout=timeout, force=True)
                     return True
-                except Exception:
+                except Exception as e:
+                    # Fallback to dispatch event
+                    # print(f"    [Click Warning] Standard click failed, trying dispatch: {e}")
                     await locator.dispatch_event("click")
                     return True
+            else:
+               # Element exists but not visible - try forceful dispatch if critical?
+               # For now, just return False to let caller handle
+               pass
+               
         return False
     except Exception as e:
         print(f"    [Action Error] robust_click failed: {e}")
         return False
+
+async def wait_for_condition(condition_func, timeout: int = 10000, interval: float = 0.5) -> bool:
+    """
+    Polls a condition_func (async) until it returns True or timeout expires.
+    """
+    import time
+    start = time.time()
+    while time.time() - start < (timeout / 1000.0):
+        try:
+            if await condition_func():
+                return True
+        except:
+            pass
+        await asyncio.sleep(interval)
+    return False
 
 async def dismiss_overlays(page: Page):
     """Actively click 'Skip' or 'Close' on common UI overlays."""

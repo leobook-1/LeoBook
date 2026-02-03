@@ -9,7 +9,7 @@ import requests
 import asyncio
 from typing import Optional
 
-from Helpers.Neo_Helpers.Managers.api_key_manager import leo_api_call_with_rotation
+from Helpers.Neo_Helpers.Managers.api_key_manager import grok_api_call
 from .prompts import RECOVERY_PROMPT
 
 
@@ -82,7 +82,7 @@ async def attempt_visual_recovery(page, context_name: str) -> bool:
     formatted_prompt = RECOVERY_PROMPT.format(html_content=html_content)
 
     try:
-        response = await leo_api_call_with_rotation(
+        response = await grok_api_call(
             formatted_prompt,
             generation_config={"response_mime_type": "application/json"}
         )

@@ -23,11 +23,33 @@ def load_knowledge():
 
 
 def save_knowledge():
-    """Saves the selector knowledge base to disk."""
+    """Performs an UPSERT operation to save knowledge."""
     KNOWLEDGE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    disk_data = {}
+    
+    # 1. Load existing data from disk (to avoid wiping parallel updates)
+    if KNOWLEDGE_FILE.exists():
+        try:
+            with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+                disk_data = json.load(f)
+        except Exception:
+            disk_data = {}
+
+    # 2. Update with current memory state (Upsert)
+    for context_key, memory_selectors in knowledge_db.items():
+        if context_key not in disk_data:
+            disk_data[context_key] = {}
+        
+        if isinstance(disk_data[context_key], dict) and isinstance(memory_selectors, dict):
+            disk_data[context_key].update(memory_selectors)
+        else:
+            disk_data[context_key] = memory_selectors
+
+    # 3. Save back to disk
     try:
         with open(KNOWLEDGE_FILE, "w", encoding="utf-8") as f:
-            json.dump(knowledge_db, f, indent=4)
+            json.dump(disk_data, f, indent=4)
+        print(f"    [DB] Saved knowledge base ({len(disk_data)} contexts)")
     except Exception as e:
         print(f"Error saving knowledge: {e}")
 

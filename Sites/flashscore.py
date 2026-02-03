@@ -7,167 +7,112 @@ from zoneinfo import ZoneInfo
 
 from playwright.async_api import Browser, Page, Playwright
 
-from Helpers.DB_Helpers.db_helpers import get_last_processed_info, save_schedule_entry, save_team_entry, save_standings, save_region_league_entry
+from Helpers.DB_Helpers.db_helpers import (
+    get_last_processed_info, save_schedule_entry, save_team_entry, 
+    save_standings, save_region_league_entry, save_prediction,
+    get_all_schedules, get_standings
+)
 from Helpers.Site_Helpers.site_helpers import fs_universal_popup_dismissal, click_next_day
 from Helpers.utils import BatchProcessor, log_error_state
 from Neo.intelligence import analyze_page_and_update_selectors, get_selector_auto
 from Neo.selector_manager import SelectorManager
-from Helpers.Site_Helpers.Extractors.h2h_extractor import extract_h2h_data, save_extracted_h2h_to_schedules
-from Helpers.Site_Helpers.Extractors.standings_extractor import extract_standings_data
+from Helpers.Site_Helpers.Extractors.h2h_extractor import extract_h2h_data, save_extracted_h2h_to_schedules, activate_h2h_tab
+from Helpers.Site_Helpers.Extractors.standings_extractor import extract_standings_data, activate_standings_tab
 from Neo.model import RuleEngine
-from Helpers.DB_Helpers.db_helpers import save_prediction
 from Helpers.constants import NAVIGATION_TIMEOUT, WAIT_FOR_LOAD_STATE_TIMEOUT
 from Helpers.monitor import PageMonitor
+from Scripts.recommend_bets import get_recommendations
 
 # --- CONFIGURATION ---
 NIGERIA_TZ = ZoneInfo("Africa/Lagos")
 
 # --- RETRY CONFIGURATION ---
-MAX_EXTRACTION_RETRIES = 3
-EXTRACTION_RETRY_DELAYS = [5, 10, 15]  # Progressive delays in seconds
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
+import logging
 
+# --- RETRY CONFIGURATION ---
+# Robust retry configuration using Tenacity
+def log_retry_attempt(retry_state):
+    print(f"      [Retry] Extraction failed (attempt {retry_state.attempt_number}), retrying...")
 
-async def retry_extraction(extraction_func, *args, **kwargs):
-    """
-    Retry wrapper for extraction functions with progressive delays.
-    Similar to retry mechanism in outcome_reviewer.py
-    """
-    for attempt in range(MAX_EXTRACTION_RETRIES):
-        try:
-            return await extraction_func(*args, **kwargs)
-        except Exception as e:
-            if attempt < MAX_EXTRACTION_RETRIES - 1:
-                delay = EXTRACTION_RETRY_DELAYS[attempt]
-                print(f"      [Retry] Extraction failed (attempt {attempt + 1}), retrying in {delay}s: {e}")
-                await asyncio.sleep(delay)
-            else:
-                print(f"      [Retry] Extraction failed after {MAX_EXTRACTION_RETRIES} attempts: {e}")
-                raise
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1.5, min=4, max=15),
+    retry=retry_if_exception_type(Exception),
+    before_sleep=log_retry_attempt
+)
+async def extract_h2h_with_retry(page, home_team, away_team):
+    """Robust H2H extraction with backoff."""
+    if await activate_h2h_tab(page):
+        return await extract_h2h_data(page, home_team, away_team)
+    return {}
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1.5, min=4, max=15),
+    retry=retry_if_exception_type(Exception),
+     before_sleep=log_retry_attempt
+)
+async def extract_standings_with_retry(page, match_label):
+    """Robust Standings extraction with backoff."""
+    if await activate_standings_tab(page, match_label):
+        return await extract_standings_data(page, match_label)
+    return []
 
 
 async def process_match_task(match_data: dict, browser: Browser):
     """
     Worker function to process a single match in a new page/context.
     """
+    # Optimize context creation
     context = await browser.new_context(
-        user_agent=(
-            "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/91.0.4472.124 Mobile Safari/537.36"
-        ),
-        timezone_id="Africa/Lagos"
+        user_agent="Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Mobile Safari/537.36",
+        timezone_id="Africa/Lagos",
+        viewport={"width": 360, "height": 800} # Mobile viewport
     )
+    # Block heavy resources
+    await context.route("**/*.{png,jpg,jpeg,gif,svg,woff,woff2}", lambda route: route.abort())
+    
     page = await context.new_page()
     PageMonitor.attach_listeners(page)
     match_label = f"{match_data.get('home_team', 'unknown')}_vs_{match_data.get('away_team', 'unknown')}"
 
-
     try:
-        print(f"    [Batch Start] {match_data['home_team']} vs {match_data['away_team']}: {match_data['date']} - {match_data['time']}")
+        print(f"    [Batch Start] {match_data['home_team']} vs {match_data['away_team']}")
+        
+        # Initialize results to avoid UnboundLocalError
+        h2h_data = {}
+        standings_data = []
+        standings_league = "Unknown"
 
         full_match_url = f"{match_data['match_link']}"
         await page.goto(full_match_url, wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT)
-        await asyncio.sleep(2.0) # Optimized from 10.0
-
-        await fs_universal_popup_dismissal(page, "match_page")
-        await page.wait_for_load_state("domcontentloaded", timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-        await analyze_page_and_update_selectors(page, "match_page")
-        await fs_universal_popup_dismissal(page, "match_page")
-
-        # --- H2H Tab & Expansion ---
-        await analyze_page_and_update_selectors(page, "match_page")
-        h2h_tab_selector = SelectorManager.get_selector("match_page", "h2h_tab")
-
-        h2h_data = {}
-        if h2h_tab_selector and await page.locator(h2h_tab_selector).is_visible(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT):
-            try:
-                await page.click(h2h_tab_selector, timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-                await page.wait_for_load_state("domcontentloaded", timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-                await asyncio.sleep(5.0)
-                await fs_universal_popup_dismissal(page, "h2h_tab")
-                await asyncio.sleep(3.0)  # Shorter wait time
-
-                 # More robust H2H expansion with better error handling
-                show_more_selector = "button:has-text('Show more matches'), a:has-text('Show more matches')"
-                try:
-                    # Wait shorter time and handle case where buttons don't exist
-                    await page.wait_for_selector(show_more_selector, timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-                    show_more_buttons = page.locator(show_more_selector).first  # Try first one
-                    if await show_more_buttons.count() > 0:
-                        print("    [H2H Expansion] Expanding available match history...")
-                        try:
-                            await show_more_buttons.click(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-                            await asyncio.sleep(2.0) # Optimized from 5.0
-
-                            # Check if clicking reveals more buttons
-                            second_button = page.locator(show_more_selector).nth(1)
-                            if await second_button.count() > 0:
-                                await second_button.click(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-                                await asyncio.sleep(1.0)
-                        except Exception:
-                            print("    [H2H Expansion] Some expansion buttons failed, but continuing...")
-                except Exception:
-                    print("    [H2H Expansion] No expansion buttons found or failed to load.")
-
-
-                await asyncio.sleep(3.0)  # Shorter wait time
-                await analyze_page_and_update_selectors(page, "h2h_tab")
-                h2h_data = await retry_extraction(extract_h2h_data, page, match_data['home_team'], match_data['away_team'], "h2h_tab")
-
-                h2h_count = len(h2h_data.get("home_last_10_matches", [])) + len(h2h_data.get("away_last_10_matches", [])) + len(h2h_data.get("head_to_head", []))
-                print(f"      [OK H2H] H2H tab data extracted for {match_label} ({h2h_count} matches found)")
-
-                # Save the initially extracted (incomplete) H2H matches
-                newly_found_past_matches = await save_extracted_h2h_to_schedules(h2h_data)
-
-                # Enrichment DISABLED: Too resource-intensive for prediction workflow
-                # Past matches are enriched on-demand during outcome review only
-                # if newly_found_past_matches:
-                #     await enrich_past_schedule_entries(newly_found_past_matches, browser)
-
-            except Exception as e:
-                print(f"      [Warning] Failed to fully load/expand H2H tab for {match_label}: {e}")
-        else:
-            print(f"      [Warning] H2H tab inaccessible for {match_label}")
-
-        # --- Data Quality Validation ---
-        home_form_count = len(h2h_data.get("home_last_10_matches", []))
-        away_form_count = len(h2h_data.get("away_last_10_matches", []))
         
-        # Require at least 3 matches of history for BOTH teams to consider prediction valid
-        if home_form_count < 3 or away_form_count < 3:
-            print(f"      [Data Quality] Skipped {match_label}: Insufficient form data (Home: {home_form_count}, Away: {away_form_count})")
-            return False
+        # --- H2H Extraction ---
+        try:
+            h2h_data = await extract_h2h_with_retry(page, match_data.get('home_team'), match_data.get('away_team'))
+            # Save H2H immediately to avoid data loss
+            if h2h_data:
+                await save_extracted_h2h_to_schedules(h2h_data)
+        except Exception as e:
+            print(f"    [H2H Fail] Could not extract H2H after retries for {match_label}: {e}")
+            h2h_data = {}
 
-        # --- Standings Tab ---
-        standings_tab_selector = SelectorManager.get_selector("match_page", "standings_tab")
-        standings_data = []
-        standings_league = "Unknown"
-        if standings_tab_selector and await page.locator(standings_tab_selector).is_visible(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT):
-            try:
-                await page.click(standings_tab_selector, timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-                await page.wait_for_load_state("domcontentloaded", timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-                await analyze_page_and_update_selectors(page, "standings_tab")
-                await asyncio.sleep(2.0) # Optimized from 5.0
-
-                await fs_universal_popup_dismissal(page, "standings_tab")
-                await asyncio.sleep(3.0)
-                standings_result = await retry_extraction(extract_standings_data, page)
-                standings_data = standings_result.get("standings", [])
-                standings_league = standings_result.get("region_league", "Unknown")
-                if standings_league == "Unknown":
-                    standings_league = h2h_data.get("region_league", "Unknown")
-                standings_league_url = standings_result.get("league_url", "")
-                if standings_result.get("has_draw_table"):
-                    print(f"      [Skip] Match has draw table, skipping.")
-                    return False
-                if standings_data and standings_league != "Unknown":
-                    # Save standings with URL
-                    for row in standings_data:
-                        row['url'] = standings_league_url
-                    save_standings(standings_data, standings_league)
-                    print(f"      [OK Standing] Standings tab data extracted for {standings_league}")
-            except Exception as e:
-                print(f"      [Warning] Failed to load Standings tab for {match_label}: {e}")
+        # --- Standings Extraction ---
+        try:
+            standings_result = await extract_standings_with_retry(page, match_label)
+            standings_data = standings_result.get("standings", [])
+            standings_league = standings_result.get("region_league", "Unknown")
+            
+            if standings_result.get("has_draw_table"):
+                print(f"      [Skip] Match has draw table, skipping.")
+                return False
+                
+            if standings_data and standings_league != "Unknown":
+                save_standings(standings_data, standings_league)
+        except Exception as e:
+            print(f"    [Standings Fail] Could not extract Standings for {match_label}: {e}")
+            standings_data = []
 
         # --- Process Data & Predict ---
         h2h_league = h2h_data.get("region_league", "Unknown")
@@ -175,7 +120,6 @@ async def process_match_task(match_data: dict, browser: Browser):
 
         if final_league != "Unknown":
             match_data["region_league"] = final_league
-            print(f"      [Extractor Validation] Updated League to: {final_league}")
 
             # Parse region and league to save to region_league.csv
             if " - " in final_league:
@@ -185,17 +129,16 @@ async def process_match_task(match_data: dict, browser: Browser):
                     'league_name': league.strip()
                 })
 
-        # --- Standings Tab ---
-        if standings_data:
-            save_standings(standings_data, final_league)
-            print(f"      [OK Standing] Standings tab data extracted for {final_league}")
-
-        analysis_input = {"h2h_data": h2h_data, "standings": standings_data}
+        analysis_input = {
+            "match_data": match_data,
+            "h2h_data": h2h_data, 
+            "standings": standings_data
+        }
         prediction = RuleEngine.analyze(analysis_input)
 
         if prediction.get("type", "SKIP") != "SKIP":
             save_prediction(match_data, prediction)
-            print(f"            [OK Signal] {match_label}")
+            print(f"    [Prediction] {match_data['home_team']} vs {match_data['away_team']} -> {prediction['type']} ({prediction['confidence']})")
             return True
         else:
             print(f"      [NO Signal] {match_label}")
@@ -203,26 +146,33 @@ async def process_match_task(match_data: dict, browser: Browser):
 
     except Exception as e:
         print(f"      [Error] Match failed {match_label}: {e}")
-        await log_error_state(page, f"process_match_task_{match_label}", e)
-        return False
+        await log_error_state(page, f"process_match_task_{match_label}", str(e))
     finally:
-        await asyncio.sleep(1.0) # Optimized from 5.0
-        await context.close()
+        try:
+            await asyncio.sleep(1.0) # Optimized from 5.0
+            if context:
+                await context.close()
+        except:
+            pass
 
 
 
 async def extract_matches_from_page(page: Page) -> list:
     """
     Executes JavaScript on the page to extract all match data for the visible day.
+    Ensures all selectors are up to date before extraction.
     """
     print("    [Extractor] Extracting match data from page...")
+    # Batch update all selectors for fs_home_page context before use
+    #await analyze_page_and_update_selectors(page, "fs_home_page", force_refresh=False)
+
     selectors = {
-        "match_rows": await get_selector_auto(page, "home_page", "match_rows"),  # type: ignore
-        "match_row_home_team_name": await get_selector_auto(page, "home_page", "match_row_home_team_name"),  # type: ignore
-        "match_row_away_team_name": await get_selector_auto(page, "home_page", "match_row_away_team_name"),  # type: ignore
-        "league_header": await get_selector_auto(page, "home_page", "league_header"),  # type: ignore
-        "league_category": await get_selector_auto(page, "home_page", "league_category"),  # type: ignore
-        "league_title": await get_selector_auto(page, "home_page", "league_title_link"),  # type: ignore
+        "match_rows": SelectorManager.get_selector("fs_home_page", "match_rows"),
+        "match_row_home_team_name": SelectorManager.get_selector("fs_home_page", "match_row_home_team_name"),
+        "match_row_away_team_name": SelectorManager.get_selector("fs_home_page", "match_row_away_team_name"),
+        "league_header": SelectorManager.get_selector("fs_home_page", "league_header"),
+        "league_category": SelectorManager.get_selector("fs_home_page", "league_category"),
+        "league_title": SelectorManager.get_selector("fs_home_page", "league_title_link"),
     }
 
     return await page.evaluate(
@@ -333,7 +283,7 @@ async def run_flashscore_analysis(playwright: Playwright):
         )
         page = await context.new_page()
         PageMonitor.attach_listeners(page)
-        processor = BatchProcessor(max_concurrent=4)
+        processor = BatchProcessor(max_concurrent=5)
 
         total_cycle_predictions = 0
 
@@ -356,19 +306,19 @@ async def run_flashscore_analysis(playwright: Playwright):
                     await context.close()
                     return
                     
-        await analyze_page_and_update_selectors(page, "home_page")
-        await fs_universal_popup_dismissal(page, "home_page")
+        #await analyze_page_and_update_selectors(page, "fs_home_page")
+        await fs_universal_popup_dismissal(page, "fs_home_page")
 
         last_processed_info = get_last_processed_info()
 
         # --- Daily Loop ---
-        for day_offset in range(14):
+        for day_offset in range(1):
             target_date = dt.now(NIGERIA_TZ) + timedelta(days=day_offset)
             target_full = target_date.strftime("%d.%m.%Y")
             
             if day_offset > 0:
-                match_row_sel = await SelectorManager.get_selector_auto(page, "home_page", "match_rows")
-                if not await click_next_day(page, match_row_sel):
+                match_row_sel = await SelectorManager.get_selector_auto(page, "fs_home_page", "match_rows")
+                if not match_row_sel or not await click_next_day(page, match_row_sel):
                     print("  [Critical] Daily navigation failed. Stopping session.")
                     break
                 await asyncio.sleep(2)
@@ -378,11 +328,11 @@ async def run_flashscore_analysis(playwright: Playwright):
                 continue
 
             print(f"\n--- ANALYZING DATE: {target_full} ---")
-            await analyze_page_and_update_selectors(page, "home_page")
-            await fs_universal_popup_dismissal(page, "home_page")
+            # Selector analysis now handled in extract_matches_from_page for batching
+            await fs_universal_popup_dismissal(page, "fs_home_page")
 
             try:
-                scheduled_tab_sel = await SelectorManager.get_selector_auto(page, "home_page", "tab_scheduled")
+                scheduled_tab_sel = await SelectorManager.get_selector_auto(page, "fs_home_page", "tab_scheduled")
                 if scheduled_tab_sel and await page.locator(scheduled_tab_sel).is_visible(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT):
                     await page.click(scheduled_tab_sel)
                     print("    [Info] Clicked scheduled tab.")
@@ -390,7 +340,7 @@ async def run_flashscore_analysis(playwright: Playwright):
             except Exception:
                 print("    [Info] Could not click Scheduled tab.")
 
-            await fs_universal_popup_dismissal(page, "home_page")
+            await fs_universal_popup_dismissal(page, "fs_home_page")
             matches_data = await extract_matches_from_page(page)
             
             # --- TIME CLEANING, ADJUSTMENT & SORTING ---
@@ -462,4 +412,156 @@ async def run_flashscore_analysis(playwright: Playwright):
              await browser.close()
              
     print(f"\n--- Flashscore Analysis Complete: {total_cycle_predictions} new predictions found. ---")
+    
+    # --- Trigger Recommendations ---
+    print("\n   [Auto] Generating betting recommendations for today...")
+    get_recommendations(save_to_file=True)
+    
     return
+
+
+async def run_flashscore_offline_repredict(playwright: Playwright):
+    """
+    Offline reprediction mode: Uses stored CSV data to generate/update predictions
+    for matches starting more than 1 hour from now.
+    """
+    print("\n   [Offline] Starting offline reprediction engine...")
+    
+    all_schedules = get_all_schedules()
+    if not all_schedules:
+        print("    [Offline Error] No schedules found in database.")
+        return
+
+    # Filter for scheduled matches
+    scheduled_matches = [m for m in all_schedules if m.get('match_status') == 'scheduled']
+    
+    now = dt.now(NIGERIA_TZ)
+    threshold = now + timedelta(hours=1)
+    
+    to_process = []
+    for m in scheduled_matches:
+        try:
+            date_str = m.get('date')
+            time_str = m.get('match_time')
+            if not date_str or not time_str or time_str == 'N/A':
+                continue
+                
+            match_dt = dt.strptime(f"{date_str} {time_str}", "%d.%m.%Y %H:%M").replace(tzinfo=NIGERIA_TZ)
+            if match_dt > threshold:
+                to_process.append(m)
+        except Exception:
+            continue
+
+    print(f"    [Offline] Found {len(to_process)} future matches (> 1 hour away) to repredict.")
+    
+    if not to_process:
+        return
+
+    # Sort historical matches once
+    def parse_date(d_str):
+        try:
+            return dt.strptime(d_str, "%d.%m.%Y")
+        except:
+            return dt.min
+
+    historical_matches = [m for m in all_schedules if m.get('match_status') != 'scheduled' and m.get('home_score') not in ('', 'N/A', None) and m.get('away_score') not in ('', 'N/A', None)]
+    
+    historical_matches.sort(key=lambda x: parse_date(x.get('date', '')), reverse=True)
+
+    total_repredicted = 0
+    for m in to_process:
+        home_team = m.get('home_team')
+        away_team = m.get('away_team')
+        region_league = m.get('region_league', 'Unknown')
+        match_label = f"{home_team} vs {away_team}"
+
+        # 1. Build H2H Data with proper mapping for AI engine
+        home_last_10 = []
+        away_last_10 = []
+        h2h_list = []
+        
+        for hist in historical_matches:
+            h_home = hist.get('home_team')
+            h_away = hist.get('away_team')
+            
+            # Create mapped match object
+            hs = hist.get('home_score', '0')
+            ascore = hist.get('away_score', '0')
+            try:
+                hsi = int(hs)
+                asi = int(ascore)
+                winner = "Home" if hsi > asi else "Away" if asi > hsi else "Draw"
+            except:
+                winner = "Draw"
+                
+            mapped_hist = {
+                "date": hist.get("date"),
+                "home": h_home,
+                "away": h_away,
+                "score": f"{hs}-{ascore}",
+                "winner": winner
+            }
+
+            # Home team last 10
+            if (h_home == home_team or h_away == home_team) and len(home_last_10) < 10:
+                home_last_10.append(mapped_hist)
+                
+            # Away team last 10
+            if (h_home == away_team or h_away == away_team) and len(away_last_10) < 10:
+                away_last_10.append(mapped_hist)
+                
+            # H2H
+            if ((h_home == home_team and h_away == away_team) or (h_home == away_team and h_away == home_team)):
+                h2h_list.append(mapped_hist)
+
+        h2h_data = {
+            "home_team": home_team,
+            "away_team": away_team,
+            "home_last_10_matches": home_last_10,
+            "away_last_10_matches": away_last_10,
+            "head_to_head": h2h_list,
+            "region_league": region_league
+        }
+
+        # 2. Get Standings with proper type conversion
+        raw_standings = get_standings(region_league)
+        standings_data = []
+        for s in raw_standings:
+            try:
+                standings_data.append({
+                    "team_name": s.get("team_name"),
+                    "position": int(s.get("position", 0)),
+                    "goal_difference": int(s.get("goal_difference", 0)),
+                    "goals_for": int(s.get("goals_for", 0)),
+                    "goals_against": int(s.get("goals_against", 0))
+                })
+            except:
+                continue
+
+        # 3. Data Quality Validation
+        if len(home_last_10) < 3 or len(away_last_10) < 3:
+            continue
+
+        # 4. Predict
+        analysis_input = {"h2h_data": h2h_data, "standings": standings_data}
+        try:
+            prediction = RuleEngine.analyze(analysis_input)
+            
+            if prediction.get("type", "SKIP") != "SKIP":
+                # Ensure match_data has necessary keys for save_prediction
+                match_data_for_save = m.copy()
+                match_data_for_save['id'] = m.get('fixture_id')
+                match_data_for_save['time'] = m.get('match_time')
+                
+                save_prediction(match_data_for_save, prediction)
+                total_repredicted += 1
+                if total_repredicted % 10 == 0:
+                    print(f"    [Offline] Repredicted {total_repredicted} matches...")
+        except Exception as e:
+            print(f"      [Offline Error] Failed predicting {match_label}: {e}")
+
+    print(f"\n--- Offline Reprediction Complete: {total_repredicted} matches repredicted. ---")
+    
+    # --- Trigger Recommendations ---
+    print("\n   [Auto] Generating betting recommendations after offline update...")
+    get_recommendations(save_to_file=True)

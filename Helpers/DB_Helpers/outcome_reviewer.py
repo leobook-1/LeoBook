@@ -259,6 +259,23 @@ async def process_review_task(match: Dict, browser, semaphore: asyncio.Semaphore
                     print(f"    [Success] {home_team} vs {away_team} -> Score: {final_score}")
                     match['actual_score'] = final_score
                     save_single_outcome(match, 'reviewed')
+                    
+                    # --- SYNC with football_com_matches.csv ---
+                    from Helpers.DB_Helpers.db_helpers import update_site_match_status, load_site_matches
+                    # Find corresponding site match by fixture_id
+                    # This is a bit inefficient (loading all matches), but robust for now.
+                    # A better way would be if predictions.csv had site_match_id, but it doesn't yet.
+                    # optimized: We can try to match by date/teams if fixture_id link missing, 
+                    # but for now let's assume if it was booked, it has a link or we just skip.
+                    if match_id:
+                         # We don't have a direct lookup from fixture_id -> site_match_id efficiently
+                         # without loading the whole site matches file. 
+                         # However, for accuracy reporting, we just need the predictions.csv updated (which we did).
+                         # The site_match status 'settled' isn't strictly critical for the booking loop 
+                         # (since we filter by date), but good for hygiene.
+                         # Let's Skip this for now to avoid O(N^2) complexity on every review unless needed.
+                         pass
+
                     await context.close()
                     return
 
@@ -315,7 +332,7 @@ async def get_final_score(page):
     """
     try:
         # Check Status
-        status_selector = get_selector("match_page", "meta_match_status") or "div.fixedHeaderDuel__detailStatus"
+        status_selector = get_selector("fs_match_page", "meta_match_status") or "div.fixedHeaderDuel__detailStatus"
         try:
             from Helpers.constants import WAIT_FOR_LOAD_STATE_TIMEOUT
             status_text = await page.locator(status_selector).inner_text(timeout=30000)
@@ -337,8 +354,8 @@ async def get_final_score(page):
             return "NOT_FINISHED"
 
         # Extract Score
-        home_score_sel = get_selector("match_page", "header_score_home") or "div.detailScore__wrapper > span:nth-child(1)"
-        away_score_sel = get_selector("match_page", "header_score_away") or "div.detailScore__wrapper > span:nth-child(3)"
+        home_score_sel = get_selector("fs_match_page", "header_score_home") or "div.detailScore__wrapper > span:nth-child(1)"
+        away_score_sel = get_selector("fs_match_page", "header_score_away") or "div.detailScore__wrapper > span:nth-child(3)"
 
         # Use shorter timeout for score extraction to prevent hanging
         SCORE_TIMEOUT = 30000  # 30 seconds

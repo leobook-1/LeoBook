@@ -12,7 +12,10 @@ from typing import Dict, Any, List, Optional
 from .csv_operations import _read_csv, _append_to_csv, _write_csv, upsert_entry
 
 # --- CSV File Paths ---
-DB_DIR = "DB"
+# Use absolute path relative to project root to stay robust
+_helpers_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_project_root = os.path.dirname(_helpers_dir)
+DB_DIR = os.path.join(_project_root, "DB")
 PREDICTIONS_CSV = os.path.join(DB_DIR, "predictions.csv")
 SCHEDULES_CSV = os.path.join(DB_DIR, "schedules.csv")
 STANDINGS_CSV = os.path.join(DB_DIR, "standings.csv")
@@ -47,7 +50,8 @@ def init_csvs():
     REGION_LEAGUE_CSV: ['region_league_id', 'region', 'league_name', 'url'],
         FOOTBALL_COM_MATCHES_CSV: [
             'site_match_id', 'date', 'home_team', 'away_team', 'league', 'url', 
-            'last_extracted', 'fixture_id', 'booking_status', 'booking_details'
+            'last_extracted', 'fixture_id', 'booking_status', 'booking_details',
+            'booking_code', 'booking_url'
         ]
     }
 
@@ -200,7 +204,9 @@ def save_site_matches(matches: List[Dict[str, Any]]):
             'last_extracted': last_extracted,
             'fixture_id': match.get('fixture_id', ''),
             'booking_status': match.get('booking_status', 'pending'),
-            'booking_details': match.get('booking_details', '')
+            'booking_details': match.get('booking_details', ''),
+            'booking_code': match.get('booking_code', ''),
+            'booking_url': match.get('booking_url', '')
         }
         upsert_entry(FOOTBALL_COM_MATCHES_CSV, row, headers, 'site_match_id')
 
@@ -212,7 +218,7 @@ def load_site_matches(target_date: str) -> List[Dict[str, Any]]:
     all_matches = _read_csv(FOOTBALL_COM_MATCHES_CSV)
     return [m for m in all_matches if m.get('date') == target_date]
 
-def update_site_match_status(site_match_id: str, status: str, fixture_id: Optional[str] = None, details: Optional[str] = None):
+def update_site_match_status(site_match_id: str, status: str, fixture_id: Optional[str] = None, details: Optional[str] = None, booking_code: str = None, booking_url: str = None):
     """Updates the booking status or connected fixture_id for a site match."""
     if not os.path.exists(FOOTBALL_COM_MATCHES_CSV):
         return
@@ -228,6 +234,8 @@ def update_site_match_status(site_match_id: str, status: str, fixture_id: Option
                     row['booking_status'] = status
                     if fixture_id: row['fixture_id'] = fixture_id
                     if details: row['booking_details'] = details
+                    if booking_code: row['booking_code'] = booking_code
+                    if booking_url: row['booking_url'] = booking_url
                     updated = True
                 rows.append(row)
 
@@ -256,6 +264,15 @@ def get_last_processed_info() -> Dict:
             print(f"    [Warning] Could not read CSV for resume check: {e}")
     return last_processed_info
 
+def get_all_schedules() -> List[Dict[str, Any]]:
+    """Loads all match schedules from schedules.csv."""
+    return _read_csv(SCHEDULES_CSV)
+
+def get_standings(region_league: str) -> List[Dict[str, Any]]:
+    """Loads standings for a specific league from standings.csv."""
+    all_standings = _read_csv(STANDINGS_CSV)
+    return [s for s in all_standings if s.get('region_league') == region_league]
+
 # To be accessible from other modules, we need to define the headers dict here
 files_and_headers = {
     PREDICTIONS_CSV: [
@@ -278,6 +295,7 @@ files_and_headers = {
     REGION_LEAGUE_CSV: ['region_league_id', 'region', 'league_name', 'url'],
     FOOTBALL_COM_MATCHES_CSV: [
         'site_match_id', 'date', 'home_team', 'away_team', 'league', 'url', 
-        'last_extracted', 'fixture_id', 'booking_status', 'booking_details'
+        'last_extracted', 'fixture_id', 'booking_status', 'booking_details',
+        'booking_code', 'booking_url'
     ]
 }

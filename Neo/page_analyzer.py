@@ -95,7 +95,7 @@ class PageAnalyzer:
         Uses Leo AI to analyze HTML content to determine context and next steps.
         """
         from .prompts import STATE_DISCOVERY_PROMPT
-        from Helpers.Neo_Helpers.Managers.api_key_manager import leo_api_call_with_rotation
+        from Helpers.Neo_Helpers.Managers.api_key_manager import grok_api_call
 
         print("    [SMART NAV] Unrecognized page state. Triggering Leo AI Discovery...")
 
@@ -165,7 +165,7 @@ class PageAnalyzer:
             formatted_prompt = STATE_DISCOVERY_PROMPT.format(html_content=html_content)
 
             # 3. Ask Leo AI for analysis
-            response = await leo_api_call_with_rotation(
+            response = await grok_api_call(
                 formatted_prompt,
                 generation_config={"response_mime_type": "application/json"}
             )

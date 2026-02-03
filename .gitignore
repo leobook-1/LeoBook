@@ -77,7 +77,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# Mind (AI Models & Data) - Exclude large files and platform-specific binaries
+# Mind (AI Models & Data) - Exclude platform-specific binaries
 Mind/model.gguf
 Mind/mmproj.gguf
 Mind/*.exe
