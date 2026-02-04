@@ -30,7 +30,7 @@ from Helpers.DB_Helpers.db_helpers import init_csvs, log_audit_event
 from Helpers.utils import Tee, LOG_DIR
 
 # --- TELEGRAM CONFIG ---
-from telegram.ext import Application, MessageHandler, filters
+from telegram.ext import Application, MessageHandler, CommandHandler, filters
 from telegram import Update
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -238,6 +238,59 @@ async def execute_withdrawal(amount: float):
         except Exception as e:
             print(f"   [Execute Error] Failed to launch context for withdrawal: {e}")
 
+async def cmd_start(update: Update, context):
+    """Intro message."""
+    await update.message.reply_text(
+        "🦁 **Leo v2.7 Active**\n"
+        "I am your autonomous betting agent. Use /help to see available commands."
+    )
+
+async def cmd_balance(update: Update, context):
+    """Last known balance."""
+    balance = state.get("current_balance", 0.0)
+    await update.message.reply_text(f"💰 **Current Balance:** ₦{balance:,.2f}")
+
+async def cmd_status(update: Update, context):
+    """Current system status."""
+    msg = (
+        f"📊 **System Status**\n"
+        f"Cycle: #{state.get('cycle_count', 0)}\n"
+        f"Phase: {state.get('current_phase', 'N/A')}\n"
+        f"Last Action: {state.get('last_action', 'N/A')}\n"
+        f"Booked this cycle: {state.get('booked_this_cycle', 0)}\n"
+        f"Failed this cycle: {state.get('failed_this_cycle', 0)}"
+    )
+    await update.message.reply_text(msg)
+
+async def cmd_help(update: Update, context):
+    """Help menu."""
+    msg = (
+        "❓ **Available Commands:**\n"
+        "/balance - Check latest account balance\n"
+        "/status - Current operation phase and cycle stats\n"
+        "/summary - Brief recap of the last 24h audit\n"
+        "/help - Show this menu\n\n"
+        "Reply **YES** or **NO** to withdrawal proposals."
+    )
+    await update.message.reply_text(msg)
+
+async def cmd_summary(update: Update, context):
+    """Audit summary for last 24h."""
+    from Helpers.DB_Helpers.db_helpers import AUDIT_LOG_CSV
+    import csv
+    if not os.path.exists(AUDIT_LOG_CSV):
+        await update.message.reply_text("📂 No audit logs found yet.")
+        return
+        
+    try:
+        with open(AUDIT_LOG_CSV, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            recent = lines[-5:] # Last 5 events
+            msg = "🕒 **Recent History (Audit Log):**\n" + "".join(recent)
+            await update.message.reply_text(msg)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error reading logs: {e}")
+
 async def handle_withdrawal_reply(update: Update, context):
     global pending_withdrawal
 
@@ -271,6 +324,15 @@ async def start_telegram_listener():
 
     try:
         app = Application.builder().token(TELEGRAM_TOKEN).build()
+        
+        # Command Handlers
+        app.add_handler(CommandHandler("start", cmd_start))
+        app.add_handler(CommandHandler("balance", cmd_balance))
+        app.add_handler(CommandHandler("status", cmd_status))
+        app.add_handler(CommandHandler("help", cmd_help))
+        app.add_handler(CommandHandler("summary", cmd_summary))
+        
+        # Message Handlers
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_withdrawal_reply))
         
         # Start polling in background

@@ -62,3 +62,14 @@ LeoBook executes a continuous infinite loop managed by `Leo.py`. Upon startup, i
 | **State** | In-Memory (`Leo.state`) | Real-time balance and cycle tracking. |
 | **Session** | `DB/ChromeData_v3` | Aggressively cleared if UI becomes inconsistent. |
 | **Stake Model** | Fractional Kelly (0.25) | Balances growth with high-reliability risk management. |
+
+---
+
+### **TELEGRAM INTERFACE (v2.7)**
+*   **Proactive Commands**:
+    *   `/balance`: Returns the last known account balance.
+    *   `/status`: Returns current phase, cycle count, and success/fail metrics.
+    *   `/summary`: Shows the last 5 entries from the Audit Log.
+    *   `/help`: Lists available interaction options.
+*   **Approval Flow**:
+    *   Leo proposes withdrawal -> User replies **YES**/**NO** -> Isolated execution.
