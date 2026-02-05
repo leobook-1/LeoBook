@@ -1,3 +1,7 @@
+# recommend_bets.py: Terminal-based prediction viewer and formatter.
+# Refactored for Clean Architecture (v2.7)
+# This script displays the top-rated AI predictions for manual review or export.
+
 import csv
 import os
 import sys
@@ -18,8 +22,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
 
-from Helpers.DB_Helpers.db_helpers import PREDICTIONS_CSV
-from Helpers.DB_Helpers.prediction_accuracy import get_market_option
+from Data.Access.db_helpers import PREDICTIONS_CSV
+from Data.Access.prediction_accuracy import get_market_option
 
 def load_data():
     if not os.path.exists(PREDICTIONS_CSV):
@@ -185,7 +189,7 @@ def get_recommendations(target_date=None, show_all_upcoming=False, **kwargs):
             script_dir = os.path.dirname(os.path.abspath(__file__))
             p_root = os.path.dirname(script_dir)
             
-        recommendations_dir = os.path.join(p_root, "DB", "RecommendedBets")
+        recommendations_dir = os.path.join(p_root, "Data", "Store", "RecommendedBets")
         if not os.path.exists(recommendations_dir):
             os.makedirs(recommendations_dir, exist_ok=True)
             

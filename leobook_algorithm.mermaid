@@ -1,0 +1,133 @@
+flowchart TD
+    %% Global Entry Point
+    START["<b>START: Leo.py</b><br/>Main Orchestrator Loop"] --> INIT["<b>Initialization</b><br/>System.lifecycle.setup<br/>Data.Access.db_helpers.init_csvs"]
+    
+    %% Phase 0: Review
+    INIT --> PHASE0["<b>PHASE 0: REVIEW</b><br/>Process Past Results"]
+    subgraph Review_Process [Phase 0 Detail]
+        PHASE0 --> GET_PENDING["Get Predictions to Review<br/>(status not in [reviewed, canceled, postponed])"]
+        GET_PENDING --> CHECK_ELIGIBLE{"Is Eligible?<br/>(Date in past OR Today + 4h)"}
+        CHECK_ELIGIBLE -->|No| SKIP_P["Skip (Wait for later)"]
+        CHECK_ELIGIBLE -->|Yes| CHECK_DB{"Found in Schedules DB?"}
+        
+        CHECK_DB -->|Yes| DB_SCORE["Extract score from DB<br/>(home_score / away_score)"]
+        CHECK_DB -->|No| WEB_SCRAPE["Web Scraping Fallback<br/>Flashscore Match Page"]
+        
+        WEB_SCRAPE --> STATUS_CHECK{"Match Status?"}
+        STATUS_CHECK -->|Finished| SCRAPE_SCORE["Extract Final Score"]
+        STATUS_CHECK -->|Postponed| LOG_POST["Update Status: match_postponed"]
+        STATUS_CHECK -->|Canceled/Error| LOG_CANC["Update Status: match_canceled"]
+        
+        DB_SCORE --> EVAL_MATCH["<b>Evaluation Logic</b><br/>Data.Access.prediction_evaluator"]
+        SCRAPE_SCORE --> EVAL_MATCH
+        
+        EVAL_MATCH --> COMP_WIN["Compare Prediction vs Actual Score<br/>(1X2, BTTS, O/U, DC)"]
+        COMP_WIN --> LOG_FINANCE["Update predictions.csv<br/>(status: reviewed, outcome_correct: T/F)"]
+        LOG_FINANCE --> SYNC_SITE["Sync with site_matches.csv<br/>(Update status to WON/LOST)"]
+        SYNC_SITE --> REPORT["Print Accuracy Report<br/>prediction_accuracy.print_accuracy_report"]
+    end
+    Review_Process --> PHASE1
+
+    %% Phase 1: Analysis
+    PHASE1["<b>PHASE 1: ANALYSIS</b><br/>Flashscore Prediction Engine"]
+    subgraph Analysis_Process [Phase 1 Detail]
+        PHASE1 --> FS_NAV_HOME["Navigate to Flashscore Football<br/>Modules.Flashscore.manager"]
+        FS_NAV_HOME --> FS_TAB["Select 'Scheduled' Tab"]
+        FS_TAB --> FS_HARVEST["<b>Fixture Harvester</b><br/>Modules.Flashscore.fs_schedule<br/>Extract ID, Time, Teams, URL"]
+        
+        FS_HARVEST --> FS_LOOP{"Match Loop<br/>(Concurrent Batch: 5)"}
+        FS_LOOP -->|Process| FS_NAV_M["Navigate to Match Detail<br/>(Activate H2H & Standings tabs)"]
+        
+        FS_NAV_M --> FS_EXTRACT["<b>Data Extraction</b><br/>Modules.Flashscore.extractor"]
+        FS_EXTRACT --> EX_H2H["Extract Home/Away/Overall H2H<br/>(Last 5-10 matches)"]
+        EX_H2H --> EX_STAND["Extract Table Standings<br/>(Pos, P, W, D, L, GF, GA, PTS)"]
+        
+        EX_STAND --> RULE_ENG["<b>Rule Engine (Decision)</b><br/>Core.Intelligence.rule_engine"]
+        subgraph Decision_Eng [Intelligence Sub-processes]
+            RULE_ENG --> ML_ENSEMBLE["ML Prediction Models<br/>(Core.Intelligence.ml_model)"]
+            RULE_ENG --> POISSON["Poisson Probability (xG)<br/>(Core.Intelligence.goal_predictor)"]
+            RULE_ENG --> HEURISTICS["Heuristic Analysis<br/>(Form, H2H, Standings Strength)"]
+        end
+        
+        Decision_Eng --> FS_PRED["Generate Market Selection<br/>(Core.Intelligence.model.analyze_match)"]
+        FS_PRED --> FS_SAVE["Save prediction to predictions.csv<br/>(status: pending)"]
+        FS_SAVE --> FS_LOOP
+        
+        FS_LOOP -->|All Done| RECOMMEND["Generate Betting Recommendations<br/>Scripts.recommend_bets"]
+    end
+    RECOMMEND --> PHASE2
+
+    %% Phase 2: Booking
+    PHASE2["<b>PHASE 2: BOOKING</b><br/>Football.com Execution"]
+    subgraph Booking_Process [Phase 2 Detail]
+        PHASE2 --> FB_START["Init Phase 2 Orchestration<br/>Modules.FootballCom.fb_manager"]
+        FB_START --> FB_LOAD_PRED["Load 'pending' predictions<br/>(Group by Date)"]
+        
+        FB_LOAD_PRED --> FB_LOGIN["<b>Session Validation</b><br/>Modules.FootballCom.navigator<br/>(Facebook Auth / Cookie Reuse)"]
+        FB_LOGIN --> FB_BAL["Extract Balance<br/>(Store in global state)"]
+        
+        FB_BAL --> FB_HARVEST_P["<b>Phase 2a: Harvest Flow</b>"]
+        subgraph Harvest_Sub [Harvest Detail]
+            FB_HARVEST_P --> FB_URL["<b>URL Resolver</b><br/>Search site for matches<br/>(Modules.FootballCom.fb_url_resolver)"]
+            FB_URL --> FB_MATCHER["<b>Matcher Component</b><br/>Semantic Matcher (LLM threshold 0.60)<br/>Normalization (Brazilian state suffixes)"]
+            FB_MATCHER --> FB_H_LOOP{"Match Loop"}
+            
+            FB_H_LOOP -->|Process| FB_CLEAR["Aggressive Betslip Clear<br/>Modules.FootballCom.booker.slip"]
+            FB_CLEAR --> FB_NAV_U["Navigate to Fixture URL"]
+            FB_NAV_U --> FB_SEARCH_M["<b>Market Discovery</b><br/>Search for Market (e.g., HT/FT, O/U)<br/>Locate Outcome Button"]
+            FB_SEARCH_M --> FB_ODDS{"Odds Check<br/>(Min 1.20?)"}
+            FB_ODDS -->|Pass| FB_BOOK["Book Bet Selection<br/>Extract 6-8 digit code"]
+            FB_BOOK --> FB_SAVE_S["Save to site_matches.csv<br/>(fixture_id, code, date, odds)"]
+            FB_ODDS -->|Fail| FB_SKIP["Update status: skipped_low_odds"]
+            FB_H_LOOP -->|Next| FB_SAVE_S
+        end
+        
+        Harvest_Sub --> FB_EXEC_P["<b>Phase 2b: Execution Flow</b>"]
+        subgraph Execute_Sub [Placement Detail]
+            FB_EXEC_P --> FB_LOAD_C["Load Harvested Codes for Date<br/>(Data.Access.db_helpers)"]
+            FB_LOAD_C --> FB_RE_ADD["Batch Add Codes to Slip"]
+            FB_RE_ADD --> FB_STAKE["<b>Staking Strategy</b><br/>Fractional Kelly (c=0.25)<br/>Stake = Balance * 0.25 * GainPerc"]
+            FB_STAKE --> FB_PLACE["Confirm & Place Accumulated Bet"]
+            FB_PLACE --> FB_LOG["Update audit_log.csv<br/>(Status: PLACED)"]
+        end
+    end
+    Booking_Process --> PHASE3
+
+    %% Phase 3: Completion
+    PHASE3["<b>PHASE 3: COMPLETION</b>"]
+    subgraph Completion_Process [Phase 3 Detail]
+        PHASE3 --> SYNC_BAL["Post-Placement Balance extraction"]
+        SYNC_BAL --> WD_CHECK["withdrawal_checker.check_triggers"]
+        WD_CHECK --> WD_COOLDOWN{"Passed 48h Cooldown?"}
+        WD_COOLDOWN -->|Yes| WD_RULES["Evaluate Amount Rules<br/>(30% Balance / 50% Last Win)"]
+        WD_RULES --> WD_FLOOR{"Remain Above ₦5000?"}
+        
+        WD_FLOOR -->|Yes| WD_PROPOSE["Propose Withdrawal<br/>(Telegram notification)"]
+        WD_PROPOSE --> WD_AUTO{"Auto-execution enabled?"}
+        
+        WD_AUTO -->|Yes| WD_FLOW["Modules.FootballCom.booker.withdrawal<br/>(PIN Entry -> Verify Success)"]
+        WD_AUTO -->|No| WD_DONE["Wait for manual trigger"]
+        
+        WD_FLOW --> LOG_WD["Save to withdrawals.csv"]
+    end
+    
+    Completion_Process --> SLEEP["Sleep 6 Hours"]
+    SLEEP --> START
+
+    %% Intelligence layer (Self-Healing)
+    subgraph Self_Healing [Intelligence & Resilience Layer]
+        S_MANAGER["<b>Selector Manager</b><br/>Core.Intelligence.selector_manager"]
+        S_MANAGER --> S_HEAL["heal_selector_on_failure"]
+        S_HEAL --> V_ANALYZER["<b>Visual Analyzer</b><br/>Screenshot Capture + DOM Cleaning"]
+        V_ANALYZER --> AI_DISC["AI Discovery Prompt<br/>(Grok / Gemini)"]
+        AI_DISC --> DB_UPSERT["Update knowledge.json<br/>(UPSERT logic)"]
+        
+        P_HANDLER["<b>Popup Handler</b><br/>Continuous Overlay Monitoring<br/>(Phase 2 Guided Tour dismissal)"]
+        RECOVERY["<b>Visual Recovery</b><br/>Escape stuck states<br/>(Core.Intelligence.recovery)"]
+    end
+    
+    %% Connections to Intelligence
+    WEB_SCRAPE -.-> S_MANAGER
+    FB_SEARCH_M -.-> S_MANAGER
+    FB_NAV_U -.-> P_HANDLER
+    FB_PLACE -.-> RECOVERY

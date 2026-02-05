@@ -86,5 +86,8 @@ Mind/llama-server
 Mind/llama.cpp/
 Mind/*.gguf
 
-# Chrome Profile Data
-DB/ChromeData*/
+# Chrome Profile Data & Data Layer
+Data/Auth/
+Data/Store/
+DB/
+storage_state.json

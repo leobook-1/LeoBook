@@ -1,3 +1,7 @@
+# repair_predictions.py: Utility to fix malformed prediction results.
+# Refactored for Clean Architecture (v2.7)
+# This script re-evaluates outcomes for predictions with 'ERROR' or 'TBD' status.
+
 import csv
 import os
 import sys
@@ -7,8 +11,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
 
-from Helpers.DB_Helpers.prediction_evaluator import evaluate_prediction
-from Helpers.DB_Helpers.db_helpers import PREDICTIONS_CSV
+from Data.Access.prediction_evaluator import evaluate_prediction
+from Data.Access.db_helpers import PREDICTIONS_CSV
 
 def repair_predictions():
     if not os.path.exists(PREDICTIONS_CSV):

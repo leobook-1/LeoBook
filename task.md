@@ -15,7 +15,14 @@
         - [x] Create `booking_code.py` -> `book_single_match` logic.
         - [x] Validate odds >= 1.20.
         - [x] Extract code/url and save to CSV.
-        - [x] Force clear slip after harvest.
+        - [x] Investigate `Leo.py` around line 47.
+        [x] Fix the unmatched brace in `Leo.py`.
+        [x] Fix `ImportError` for `book_single_match` in `football_com` (renamed to `harvest_single_match_code`).
+        [x] Fix `SyntaxError` in `placement.py` (removed stray backticks).
+        [x] Fix Telegram event loop conflict in `Leo.py`.
+        [x] Update `requirements.txt` with latest dependencies.
+        [x] Fix indentation error in `matcher.py` (Done).
+        [ ] Verify the complete system startup.
     - [x] **Phase 2b: Execution (Multi)**:
         - [x] Update `football_com.py` to drive Harvest -> Execute loop.
         - [x] Update `placement.py` -> `place_multi_bet_from_codes`.
@@ -23,6 +30,11 @@
     - [x] **Withdrawal**:
         - [x] Update `withdrawal.py` with min/max rules (min 500, max 30% bal).
 
-- [ ] **Administrative**
+- [x] **Phase 2 Robustness Upgrades**
+    - [x] **AI Matcher**: Increase LLM timeout and optimize retry logic (Done).
+    - [x] **Timezone Sync**: Align `predictions.csv` and site to Nigerian Time (UTC+1) (Done).
+    - [x] **Market Discovery**: Implement search-based discovery (Click Search -> Input -> Enter) (Done).
+    - [x] **Navigation**: Improve `football_com` selector robustness (Done).
+    - [x] **Architecture**: Remove local LLM server and enforce OpenRouter (Done).
     - [ ] Copy artifacts to project root.
     - [ ] Verify no changes made to Phase 0 or Phase 1.

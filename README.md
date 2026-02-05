@@ -51,11 +51,13 @@ SUPPORTED BETTING MARKETS:
 
 SYSTEM COMPONENTS:
 - **Leo.py**: Main controller orchestrating the "Observe, Decide, Act" core loop.
-- **Neo/**: The Brain (Model + Intelligence + Visual Analyzer).
-- **Helpers/**: Utility systems (Audit, DB, Matcher, Navigator).
-- **DB/**: Central data storage including the dynamic `audit_log.csv` and `knowledge.json`.
+- **Core/**: The Brain (Intelligence, Visual Analyzer, System primitives, Browser helpers).
+- **Data/**: Central data layer (Persistence, Access, DB helpers).
+- **Modules/**: Site-specific integrations (Flashscore, Football.com).
+- **Scripts/**: Utility tools for reporting and DB maintenance.
 
 MAINTENANCE:
 - Monitor **`DB/audit_log.csv`** for real-time financial transparency.
 - Review **`walkthrough.md`** for detailed implementation logs of current session.
+- Refer to **`leobook_algorithm.md`** for exhaustive file and function documentation.
 """
