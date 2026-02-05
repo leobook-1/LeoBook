@@ -15,10 +15,7 @@ from playwright.async_api import Playwright
 from .fb_setup import get_pending_predictions_by_date
 from .fb_session import launch_browser_with_retry
 from .fb_url_resolver import resolve_urls
-from .fb_harvester import run_harvest_loop
 from .navigator import load_or_create_session, extract_balance
-from .booker.placement import place_multi_bet_from_codes
-from Data.Access.db_helpers import load_harvested_site_matches
 from Core.Utils.utils import log_error_state
 from Core.Utils.monitor import PageMonitor
 from Core.System.lifecycle import log_state
@@ -62,22 +59,11 @@ async def run_football_com_booking(playwright: Playwright):
                 if not matched_urls:
                     continue
 
-                # 2. Harvest Phase
-                harvested_count = await run_harvest_loop(page, matched_urls, day_preds, target_date, current_balance)
-
-                # 3. Execute Phase
-                if harvested_count > 0:
-                    harvested_matches = load_harvested_site_matches(target_date)
-                    print(f"  [Phase 2b] Entering Execution for {len(harvested_matches)} selections...")
-                    success = await place_multi_bet_from_codes(page, harvested_matches, current_balance)
-                    if success:
-                        print(f"  [Execute] Multi-bet placed successfully for {target_date}!")
-                        log_state("Phase 2", "Multi Placed", f"{harvested_count} selections")
-                    else:
-                        log_state("Phase 2", "Multi Failed", "Placement error")
-                else:
-                    print("  [Execute] No harvested matches available to place multi-bet for this date.")
-                    log_state("Phase 2", "No Harvest", "Skipping multi placement")
+                # 2. Betting Phase (Unified)
+                from Modules.FootballCom.booker.booking_code import place_bets_for_matches
+                await place_bets_for_matches(page, matched_urls, day_preds, target_date)
+                
+                log_state("Phase 2", "Cycle Complete", f"Processed {target_date}")
 
             break  # Success exit
 

@@ -73,19 +73,13 @@ For a high-level visual representation, see: [leobook_algorithm.mmd](file:///c:/
   - **Rotation Layer**: [unified_matcher.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/unified_matcher.py) (Rotates through Grok, Gemini, and OpenRouter).
   - **Matching Strategy**: Bypasses local fuzzy matching; relies on AI semantic intelligence to map `fixture_id` to URLs while filtering for "already started" matches.
   - **Action**: Extracts sharing booking codes for each matched fixture.
-    - [booking_code.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/booking_code.py): `harvest_single_match_code()` worker:
-        - Navigates to match URL.
-        - [mapping.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/mapping.py): `find_market_and_outcome()` locates UI elements.
-        - [ui.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/ui.py): `robust_click()` handles selections.
-        - Checks odds (Min 1.20).
-        - Extracts 6-8 digit booking code and saves to `site_matches.csv`.
-    - [slip.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/slip.py): `force_clear_slip()` ensures the slip is empty after each code harvest.
-
-3.  **Phase 2b: Execution (Placement)**:
-    - [placement.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/placement.py): `place_multi_bet_from_codes()`:
-        - Re-injects harvested codes into the betslip.
-        - Calculates stake via `calculate_kelly_stake()` (Fractional Kelly c=0.25).
-        - Executes final placement and logs event via `log_audit_event()`.
+    - [booking_code.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/booking_code.py): `place_bets_for_matches()` orchestrator:
+        - **Time Check**: Skips matches <10 mins to start using `check_match_start_time()`.
+        - **Navigation**: Visits match URL, ensures "Bet Insights" widget is collapsed.
+        - **Market Search**: Unifies search for market/outcome using dynamic selectors.
+        - **Selection**: Clicks outcome button via `robust_click()`.
+        - **Accumulation**: Adds to slip until limit, then finalizes via `finalize_accumulator()`.
+    - [slip.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/slip.py): `get_bet_slip_count()` tracks capacity.
 
 ---
 

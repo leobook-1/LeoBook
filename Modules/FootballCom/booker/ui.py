@@ -31,10 +31,7 @@ async def handle_page_overlays(page: Page):
         except: pass
 
 async def robust_click(locator: Locator, page: Page, timeout: int = 5000):
-    """
-    A resilient click function that handles overlays and retries via dispatch_event.
-    Logs success/failure explicitely.
-    """
+    """A resilient click function that handles overlays and retries via dispatch_event."""
     try:
         await handle_page_overlays(page)
         if await locator.count() > 0:
@@ -43,22 +40,12 @@ async def robust_click(locator: Locator, page: Page, timeout: int = 5000):
             except: pass
             
             if await locator.is_visible(timeout=timeout):
-                # Attempt standard click
                 try:
                     await locator.click(timeout=timeout, force=True)
                     return True
-                except Exception as e:
-                    # Fallback to dispatch event
+                except Exception:
                     await locator.dispatch_event("click")
                     return True
-            else:
-               # Element exists but not strictly 'visible' - try forceful dispatch
-               try:
-                   await locator.dispatch_event("click")
-                   return True
-               except:
-                   return False
-               
         return False
     except Exception as e:
         print(f"    [Action Error] robust_click failed: {e}")

@@ -96,7 +96,9 @@ async def perform_login(page: Page):
 
         # Debug: Print all clickable elements that might be login buttons
         try:
-            all_buttons = await page.query_selector_all('button, a, div[role="button"], span[role="button"]')
+             # Generic clickables
+            clickable_sel = SelectorManager.get_selector_strict("fb_global", "clickable_elements_generic")
+            all_buttons = await page.query_selector_all(clickable_sel)
             # print(f"  [Debug] Found {len(all_buttons)} potential clickable elements")
             for i, btn in enumerate(all_buttons[:10]):  # Check first 10
                 try:
@@ -167,10 +169,10 @@ async def perform_login(page: Page):
              await page.locator(mobile_selector).scroll_into_view_if_needed()
              await page.fill(mobile_selector, PHONE)
         except Exception as e:
-             print(f"  [Login Warning] Primary mobile selector failed: {e}. Trying fallback 'input[type=tel]'...")
+             print(f"  [Login Warning] Primary mobile selector failed: {e}. Trying fallback...")
              # Fallback to generic attribute selector
-             mobile_fallback = "input[type='tel']"
-             if await page.locator(mobile_fallback).count() > 0:
+             mobile_fallback = SelectorManager.get_selector_strict("fb_login_page", "mobile_input_fallback")
+             if mobile_fallback and await page.locator(mobile_fallback).count() > 0:
                 await page.fill(mobile_fallback, PHONE)
              else:
                 raise e # Re-raise if fallback also fails
@@ -270,19 +272,25 @@ async def load_or_create_session(context: BrowserContext) -> Tuple[BrowserContex
 async def hide_overlays(page: Page):
     """Inject CSS to hide obstructing overlays like bottom nav and download bars."""
     try:
+        # Get selectors info
+        overlay_sel = SelectorManager.get_selector_strict("fb_global", "overlay_elements")
+        
         # Simplified CSS to avoid hiding core elements accidentally
-        await page.add_style_tag(content="""
-            .m-bottom-nav, .place-bet, .app-download-bar, .promotion-popup-wrapper, 
-            .download-app-bar, .cookie-banner {
+        css_content = f"""
+            {overlay_sel} {{
                 display: none !important;
                 visibility: hidden !important;
                 pointer-events: none !important;
-            }
-        """)
+            }}
+        """
+        await page.add_style_tag(content=css_content)
+        
         # Force JS hide for persistent elements
-        await page.evaluate("""() => {
-            document.querySelectorAll('.m-bottom-nav, .place-bet, .app-download-bar').forEach(el => el.style.display = 'none');
-        }""")
+        js_eval = f"""() => {{
+            document.querySelectorAll('{overlay_sel}').forEach(el => el.style.display = 'none');
+        }}"""
+        await page.evaluate(js_eval)
+        
        # print("  [UI] Overlays hidden via CSS injection.")
     except Exception as e:
         print(f"  [UI] Failed to hide overlays: {e}")
@@ -376,9 +384,12 @@ async def select_target_date(page: Page, target_date: str) -> bool:
     for day in possible_days:
         try:
             # Try specific dynamic item selector if available + text filter
-            day_selector = f"text='{day}'"
-            if await page.locator(day_selector).count() > 0:
-                await page.locator(f'li:has-text("{day}")').click()
+            # day_selector = f"text='{day}'" # Removed hardcoded
+            day_item_tmpl = SelectorManager.get_selector_strict("fb_schedule_page", "day_list_item_template")
+            day_item_sel = day_item_tmpl.replace("{day}", day)
+
+            if await page.locator(day_item_sel).count() > 0:
+                await page.locator(day_item_sel).click()
                 print(f"  [Filter] Successfully selected: {day}")
                 day_found = True
             else:
@@ -401,9 +412,12 @@ async def select_target_date(page: Page, target_date: str) -> bool:
 
                     # Try to select "League" from dropdown options (Content filter)
                     target_sort = "League"
-                    league_selector = f"text='{target_sort}'"
-                    await page.locator(f'{sort_sel} >> div.m-list').wait_for(state="visible")
-                    await page.locator(f'{sort_sel} >> li:has-text("{target_sort}")').click()
+                    list_sel = SelectorManager.get_selector_strict("fb_schedule_page", "sort_dropdown_list_container")
+                    item_tmpl = SelectorManager.get_selector_strict("fb_schedule_page", "sort_dropdown_list_item_template")
+                    item_sel = item_tmpl.replace("{sort}", target_sort)
+
+                    await page.locator(f'{sort_sel} >> {list_sel}').wait_for(state="visible")
+                    await page.locator(f'{sort_sel} >> {item_sel}').click()
                     print("  [Filter] Successfully sorted by League")
                     league_sorted = True
                     await asyncio.sleep(1)

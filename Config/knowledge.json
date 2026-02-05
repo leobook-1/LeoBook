@@ -109,6 +109,8 @@
         "match_market_table_header": ".m-table-row:has(.m-outcome-row-specifier-combo-title)",
         "match_market_table_row": ".m-table-row:not(:has(.m-outcome-row-specifier-combo-title))",
         "match_market_odds_button": ".m-table-row > div.un-rounded-rem-[10px]",
+        "outcome_row_container": ".m-table-row",
+        "place_bet_button": "[data-op='betslip-placebet']",
         "navbar_balance": ".navbar-balance > span:not(.currency)",
         "slip_drawer_container": ".m-fast-betslip",
         "slip_trigger_button": ".betslip-trigger, [data-op=\"betslip-open\"]",
@@ -217,8 +219,16 @@
         "book_bet_button": ".m-book-btn",
         "booking_code_modal": ".drawer.bottom-panel-drawer, #booking-code-detail-panel-container",
         "modal_close_button": ".middle.close .arrow-icon, .close-icon",
-        "search_input_fallback": "input[type='search'], input[placeholder*='search' i], input[aria-label*='search' i]",
-        "market_container": ".markets-container, .market-list, .betting-markets"
+        "search_icon_fallback": ".m-search-icon, .icon-search, [class*='search-icon']",
+        "search_input_fallback": "input[type='search'], input[placeholder*='search' i], input[aria-label*='search' i], .m-search-input input",
+        "market_container": ".markets-container, .market-list, .betting-markets, .m-market-list",
+        "market_collapsed_indicator": ".collapsed, .icon-arrow-down",
+        "market_table_row": ".m-table-row",
+        "over_under_line_text": "em",
+        "tabular_outcome_button": ".un-rounded-rem-\\[10px\\]",
+        "outcome_item_generic": ".m-outcome-item",
+        "outcome_xpath_template": "//div[contains(@class, 'm-outcome-item')]//*[normalize-space()='{text}']",
+        "outcome_button_fallback_template": "button:has-text('{text}'), div[role='button']:has-text('{text}'), .m-outcome-item:has-text('{text}')"
     },
     "fb_schedule_page": {
         "filter_dropdown_today": ".m-choose-time",
@@ -318,7 +328,11 @@
         "expanded_league_sections": ".league-wrapper:not(.collapsed)",
         "collapsed_league_sections": ".league-wrapper.collapsed",
         "league_with_matches": ".league-wrapper .match-card-section",
-        "league_without_matches": ".league-wrapper .no-data"
+        "league_without_matches": ".league-wrapper .no-data",
+        "day_list_item_template": "li:has-text(\"{day}\")",
+        "sort_dropdown_list_container": "div.m-list",
+        "sort_dropdown_list_item_template": "li:has-text(\"{sort}\")",
+        "league_header_fallback_tag": "h4"
     },
     "fb_main_page": {
         "navbar_balance": ".navbar-balance > span:not(.currency)",
@@ -410,7 +424,8 @@
         "login_input_username": "input[placeholder=\"Mobile Number\"]",
         "login_input_password": "input[placeholder=\"Password\"]",
         "login_button_submit": "button:has-text(\"Login\")",
-        "login_error_message": ".error-msg-area"
+        "login_error_message": ".error-msg-area",
+        "mobile_input_fallback": "input[type='tel']"
     },
     "fb_global": {
         "full_schedule_button": "a[href*=\"/sport/football/today\"]",
@@ -429,7 +444,9 @@
         "join_now_visible": ".m-login-not .m-btn-join-now:visible",
         "login_visible": ".m-login-not .m-btn-login:visible",
         "not_logged_in_indicator": ".m-login-not",
-        "logged_in_indicator": ".navbar-balance, .user-avatar, .mini-me-page-dialog-container"
+        "logged_in_indicator": ".navbar-balance, .user-avatar, .mini-me-page-dialog-container",
+        "clickable_elements_generic": "button, a, div[role='button'], span[role='button']",
+        "overlay_elements": ".m-bottom-nav, .place-bet, .app-download-bar, .promotion-popup-wrapper, .download-app-bar, .cookie-banner"
     },
     "fb_booking_share_page": {
         "booking_code_container": ".booking-code-share-code",

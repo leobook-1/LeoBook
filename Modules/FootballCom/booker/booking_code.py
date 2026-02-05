@@ -1,343 +1,455 @@
-# booking_code.py: Bet code generation and betslip preparation.
-# Refactored for Clean Architecture (v2.7)
-# This script searches for outcomes and retrieves the shareable booking codes.
-
 """
-Booking Code Extractor
-Handles the specific logic for Phase 2a: Harvest.
-Visits a match, books a single bet, extracts the code, and saves it.
+Bet Placement Orchestration
+Handles adding selections to the slip and finalizing accumulators.
 """
 
 import asyncio
-import re
-from typing import Dict, Optional, Tuple
+from typing import List, Dict
+from pathlib import Path
+from datetime import datetime as dt
 from playwright.async_api import Page
+from Core.Browser.site_helpers import get_main_frame
+from Data.Access.db_helpers import (
+    update_prediction_status, 
+    update_site_match_status, 
+    get_site_match_id
+)
+from Core.Utils.utils import log_error_state, capture_debug_snapshot
+# Corrected Imports for Core.Intelligence
 from Core.Intelligence.selector_manager import SelectorManager
-from .ui import robust_click
-from .slip import force_clear_slip
-from Data.Access.db_helpers import update_site_match_status, update_prediction_status
+from Core.Intelligence.intelligence import get_selector, get_selector_auto, fb_universal_popup_dismissal as neo_popup_dismissal
 
-
-async def get_outcome_odds(loc):
-    try:
-        odds_text = await loc.evaluate('el => el.nextElementSibling?.innerText || ""')
-        return float(odds_text.replace(",", ".").strip()) if odds_text else 0.0
-    except:
-        return 0.0
-
-
-async def harvest_single_match_code(page: Page, match: Dict, prediction: Dict) -> bool:
-    """
-    Robust Phase 2a Harvest with extended timeouts, animation delays, fallbacks, and retries.
-    """
-    fixture_id = prediction.get('fixture_id')
-    url = match.get('url')
-    outcome = prediction.get('prediction')
-
-    print(f"\n   [Harvest] Starting for fixture {fixture_id} - {url}")
-
-    for attempt in range(1, 4):  # Full retry loop
-        try:
-            # Pre-clear
-            await force_clear_slip(page)
-            await asyncio.sleep(3)
-
-            # Navigate & stabilize
-            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_selector(
-                SelectorManager.get_selector_strict("fb_match_page", "match_header"),
-                timeout=30000
-            )
-            await page.screenshot(path=f"Logs/Debug/harvest_pre_{fixture_id}_attempt{attempt}.png")
-
-            # Click search icon - Try multiple candidates and find visible one
-            search_icon_sel = SelectorManager.get_selector_strict("fb_match_page", "search_icon")
-            icons = page.locator(search_icon_sel)
-            clicked = False
-            for i in range(await icons.count()):
-                icon = icons.nth(i)
-                if await icon.is_visible():
-                    await robust_click(icon, page)
-                    clicked = True
-                    break
-            
-            if not clicked:
-                # Fallback to general search icons if strict selector fails visible check
-                await robust_click(page.locator(".m-search-icon, .icon-search, [class*='search-icon']").first, page)
-            
-            await asyncio.sleep(2)  # Critical animation delay
-
-            # Wait for input with more exhaustive fallbacks
-            input_selectors = [
-                SelectorManager.get_selector_strict("fb_match_page", "search_input"),
-                'input[type="search"]',
-                '.m-search-input input',
-                'input[placeholder*="search" i]',
-                'input[aria-label*="search" i]',
-                '.search-box input'
-            ]
-            search_input = None
-            for sel in input_selectors:
-                loc = page.locator(sel).first
-                try:
-                    # Check visibility without waiting 15s every time
-                    if await loc.is_visible():
-                        search_input = loc
-                        break
-                    # If not immediately visible, wait a short bit
-                    await loc.wait_for(state="visible", timeout=3000)
-                    search_input = loc
-                    break
-                except:
-                    continue
-
-            if not search_input:
-                # Final attempt: just try to find ANY visible input in a search-like container
-                try:
-                    alt_input = page.locator("div[class*='search'] input, section[class*='search'] input").first
-                    if await alt_input.is_visible(timeout=2000):
-                        search_input = alt_input
-                except: pass
-
-            if not search_input:
-                raise TimeoutError("Search input not visible after multiple fallback attempts")
-
-            from .mapping import find_market_and_outcome
-            market_name, _ = await find_market_and_outcome(prediction)
-            if not market_name: market_name = outcome
-
-            await search_input.fill(market_name)
-            await search_input.press("Enter")
-            await asyncio.sleep(2)
-
-            # Wait for market results
-            # Wait for market results - Flexible Wait
-            market_container_sel = ".markets-container, .market-list, .betting-markets, .m-market-list"
-            market_found = False
-            for _ in range(10): # 10 * 1s = 10s flexible wait
-                try:
-                    if await page.locator(market_container_sel).first.is_visible():
-                        market_found = True
-                        break
-                except: pass
-                await asyncio.sleep(1)
-            
-            if not market_found:
-                 # It's possible the search result IS the market list (e.g. filtered view)
-                 # so we proceed but log a warning if strictly needed
-                 print("    [Harvest Warning] Market container not strictly visible, but proceeding to outcome search...")
-
-            await asyncio.sleep(1)
-
-            # Expand market if collapsed (Handled robustly in select_outcome now)
-            # Pre-expansion removed to avoid strict mode violations on generic selectors.
-
-            # Select outcome with logic for Tabular markets (Over/Under)
-            success = await select_outcome(page, prediction)
-            if not success:
-                 print(f"    [Harvest Failed] Could not select outcome for '{outcome}'")
-                 return False
-                 
-            # Note: select_outcome now handles locating the button. 
-            # We need to re-verify odds logic from the returned element if needed, 
-            # but select_outcome encapsulates that.  
-            
-            # Post-selection: The button is clicked inside select_outcome.
-            # We just need to proceed to booking.
-            await asyncio.sleep(2)
-            await page.wait_for_selector("fb_match_page.bet_slip_container", timeout=15000)
-
-            # Book Bet & Extract
-            book_btn_sel = SelectorManager.get_selector_strict("fb_match_page", "book_bet_button")
-            await robust_click(page.locator(book_btn_sel).first, page)
-            await page.wait_for_selector("fb_match_page.booking_modal", timeout=20000)
-            code = await page.inner_text("fb_booking_share_page.booking_code_text", timeout=10000)
-            booking_url = await page.get_attribute("fb_booking_share_page.booking_share_link", "href") or f"https://www.football.com/ng/m?shareCode={code}"
-
-            # Save
-            from Data.Access.db_helpers import append_or_update
-            append_or_update("football_com_matches.csv", fixture_id, {
-                "booking_code": code,
-                "booking_url": booking_url,
-                "status": "harvested"
-            })
-
-            # Dismiss & post-clear
-            dismiss_sel = SelectorManager.get_selector("fb_match_page", "modal_dismiss") or "fb_match_page.modal_dismiss"
-            await robust_click(page.locator(dismiss_sel).first, page)
-            await force_clear_slip(page)
-
-            print(f"    [Harvest Success] Code: {code}")
-            await page.screenshot(path=f"Logs/Debug/harvest_success_{fixture_id}.png")
-            print(f"    [Harvest Success] {fixture_id} -> Code: {code}")
-            return True
-
-        except Exception as e:
-            print(f"    [Harvest Retry] Attempt {attempt} failed: {str(e)}")
-            await page.screenshot(path=f"Logs/Debug/harvest_fail_attempt{attempt}_{fixture_id}.png")
-            await asyncio.sleep(10)
-
-    print(f"    [Harvest Failed] {fixture_id} after 3 attempts")
-    update_prediction_status(fixture_id, prediction.get('date'), "failed_harvest")
-    print(f"    [Harvest Error] {fixture_id}: All attempts failed")
-    return False
-
-    
+from .ui import robust_click, handle_page_overlays, dismiss_overlays
 from .mapping import find_market_and_outcome
+from .slip import get_bet_slip_count
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
-async def expand_collapsed_market(page: Page, market_name: str):
-    """If a market is found but collapsed, expand it."""
+async def ensure_bet_insights_collapsed(page: Page):
+    """Ensure the bet insights widget is collapsed to prevent obstruction."""
     try:
-        header_sel = SelectorManager.get_selector("fb_match_page", "market_header")
-        if header_sel:
-             target_header = page.locator(header_sel).filter(has_text=market_name).first
-             if await target_header.count() > 0:
-                 # print(f"    [Market] Clicking market header for '{market_name}' to ensure expansion...")
-                 await robust_click(target_header, page)
-                 await asyncio.sleep(1)
+        header = page.locator('div.srct-widget-header_custom').first
+        if await header.count() > 0:
+            arrow = header.locator('div.srct-widget-header_custom-arrow')
+            if await arrow.count() > 0:
+                is_expanded = await arrow.evaluate('el => el.classList.contains("rotate-arrow")')
+                if is_expanded:
+                    print("    [UI] Collapsing Bet Insights widget...")
+                    await header.click()
+                    # Wait for collapse animation or arrow status change
+                    try:
+                       await arrow.wait_for(state='visible', timeout=2000)
+                    except:
+                       pass
     except Exception as e:
-        print(f"    [Market] Expansion failed: {e}")
+        print(f"    [UI] Bet Insights collapse check failed (non-critical): {e}")
 
-async def select_outcome(page: Page, prediction: Dict) -> bool:
-    """
-    Safe outcome selection with odds check (v2.7).
-    Handles standard buttons and Tabular markets (Over/Under).
-    """
-    from .mapping import find_market_and_outcome
-    import re
-    
-    # 1. Map Prediction
-    m_name, o_name = await find_market_and_outcome(prediction)
-    if not m_name:
-        print(f"    [Selection Error] No mapping for pred: {prediction.get('prediction')}")
-        return False
 
+async def check_match_start_time(page: Page) -> bool:
+    """Check if the match is within 10 minutes of starting time."""
     try:
-        # 2. Expand Market if needed
-        # Use first() to avoid strict mode violations if multiple matches found
-        header_sel = SelectorManager.get_selector_strict("fb_match_page", "market_group_header")
-        market_container = page.locator(header_sel).filter(has_text=m_name).first
-        
-        if await market_container.count() > 0:
-            # Scroll it into view
-            await market_container.scroll_into_view_if_needed()
-            await asyncio.sleep(0.5)
+        # Get match time using dynamic selector
+        time_sel = await get_selector_auto(page, "fb_match_page", "match_detail_time_elapsed")
+        if not time_sel:
+            time_sel = await get_selector_auto(page, "fb_match_page", "match_detail_status")
 
-            # Check if collapsed (often has a specific class or child icon)
-            is_collapsed = await market_container.locator(".collapsed").count() > 0 or \
-                           await market_container.locator(".icon-arrow-down").count() > 0
-            
-            if is_collapsed:
-                # print(f"    [Selection] Market '{m_name}' is collapsed. Expanding...")
-                await robust_click(market_container, page)
-                await asyncio.sleep(1.5)
-        else:
-            # Proactive Search: Use the Site's Search Functionality (User Request)
-            print(f"    [Selection] Market '{m_name}' not found. Attempting search-based discovery...")
-            
-            search_btn_sel = SelectorManager.get_selector_strict("fb_match_page", "match_market_search_icon_button") or \
-                             SelectorManager.get_selector_strict("fb_match_page", "search_icon")
-            search_input_sel = SelectorManager.get_selector_strict("fb_match_page", "match_market_search_input") or \
-                               SelectorManager.get_selector_strict("fb_match_page", "search_input")
-            
-            if search_btn_sel and await page.locator(search_btn_sel).count() > 0:
-                await robust_click(page.locator(search_btn_sel).first, page)
-                
-            if search_input_sel:
-                 # CRITICAL: Max 1.5s delay allowed here per user request
-                 await asyncio.sleep(1.5)
-                 await page.fill(search_input_sel, m_name)
-                 await page.press(search_input_sel, "Enter")
-                 await asyncio.sleep(2)
-                 
-                 # After search, check again
-                 market_container = page.locator(header_sel).filter(has_text=m_name).first
-                 if await market_container.count() > 0:
-                      if await market_container.locator(".collapsed").count() > 0:
-                          await robust_click(market_container, page)
-            
-        # 3. Locate Outcome Button
-        outcome_btn = None
-        
-        # A) Special Handling for Over/Under (Tabular)
-        # e.g. "Goals Over/Under", "Over 2.5"
-        if "Over/Under" in m_name:
-            ou_match = re.search(r"(Over|Under) (\d+\.5)", o_name, re.IGNORECASE)
-            if ou_match:
-                ou_type = ou_match.group(1).title() # "Over" or "Under"
-                line = ou_match.group(2) # "0.5", "1.5"
-                
-                # Find row with this line
-                # Look for 'em' tag with exact text inside a table row
-                row_loc = page.locator(f".m-table-row").filter(has=page.locator(f"em", has_text=line))
-                
-                if await row_loc.count() > 0:
-                    # Found row. Get buttons container (second cell usually)
-                    # The buttons are usually divs with 'un-rounded' class inside the flex container
-                    # We assume 1st = Over, 2nd = Under based on standard layout
-                    btn_index = 0 if ou_type == "Over" else 1
-                    outcome_btn = row_loc.locator(".un-rounded-rem-\[10px\]").nth(btn_index)
-                    print(f"    [Selection] Found tabular button for {ou_type} {line}")
+        if time_sel:
+            if await page.locator(time_sel).count() > 0:
+                time_text = await page.locator(time_sel).first.inner_text(timeout=3000)
+                if time_text:
+                    time_text = time_text.strip().lower()
+                    print(f"    [Time Check] Match status: '{time_text}'")
 
-        # B) Standard Text Search (Fallback)
-        if not outcome_btn or await outcome_btn.count() == 0:
-            outcome_btn = page.locator(f"//div[contains(@class, 'm-outcome-item')]//*[normalize-space()='{o_name}']").first
-        
-        # C) Fallback 2: button or div with role button
-        if not outcome_btn or await outcome_btn.count() == 0:
-            btn_sel = f"button:has-text('{o_name}'), div[role='button']:has-text('{o_name}'), .m-outcome-item:has-text('{o_name}')"
-            outcome_btn = page.locator(btn_sel).filter(has_text=re.compile(f"^{o_name}$|^{o_name}\\s|\\s{o_name}$")).first
+                    # Check for ongoing or finished matches
+                    if any(keyword in time_text for keyword in ['live', 'in play', 'ft', 'finished', 'ended', 'postponed']):
+                        print("    [Time Check] Match is already live or finished. Skipping.")
+                        return False
 
-        if not outcome_btn or await outcome_btn.count() == 0:
-            print(f"    [Selection Error] Outcome button '{o_name}' not found.")
-            return False
+                    # Check for countdown time
+                    if ':' in time_text and any(char.isdigit() for char in time_text):
+                        # Try to parse time format like "45:00" or "15:30"
+                        try:
+                            # Extract time part (assume format like "15:30" or just "15:30")
+                            time_part = time_text.replace(' ', '')
+                            if time_part.count(':') == 1:
+                                minutes_str, seconds_str = time_part.split(':')
+                                if minutes_str.isdigit() and seconds_str.isdigit():
+                                    minutes = int(minutes_str)
+                                    seconds = int(seconds_str)
+                                    total_seconds = minutes * 60 + seconds
 
-        # Extract Odds & Verify
-        odds_text = await outcome_btn.inner_text()
-        # regex for float numbers
-        odds_match = re.search(r'(\d+\.\d+)', odds_text)
-        if odds_match:
-            odds_val = float(odds_match.group(1))
-            if odds_val < 1.20:
-                print(f"    [Selection Skip] Odds {odds_val} for '{o_name}' are < 1.20 limit.")
+                                    # Check if match is within 10 minutes (600 seconds) of starting
+                                    if total_seconds <= 600:  # 10 minutes = 600 seconds
+                                        print(f"    [Time Check] Match starts in {minutes}:{seconds:02d} ({total_seconds}s) - within 10 minutes. Proceeding.")
+                                        return True
+                                    else:
+                                        print(f"    [Time Check] Match starts in {minutes}:{seconds:02d} ({total_seconds}s) - too far ahead. Skipping.")
+                                        return False
+                        except ValueError:
+                            pass
+
+                    # If we can't parse the time but it's not clearly live/finished, assume it's okay to check
+                    print("    [Time Check] Could not parse exact time, but match doesn't appear live. Proceeding.")
+                    return True
+
+        # Fallback: check for live indicators
+        live_indicators = [
+            "div.live-in-play-icon",
+            "[data-testid='wcl-icon-live']",
+            ".live-tag",
+            "span.live-in-play-icon"
+        ]
+
+        for indicator in live_indicators:
+            if await page.locator(indicator).count() > 0:
+                print("    [Time Check] Found live indicator. Match is already in progress. Skipping.")
                 return False
-            # print(f"    [Selection] Found odds: {odds_val} for '{o_name}'.")
 
-        # 4. Click
-        await robust_click(outcome_btn, page)
+        print("    [Time Check] No clear time or live indicators found. Assuming match is upcoming.")
         return True
 
     except Exception as e:
-        print(f"    [Selection Error] Logic failed: {e}")
+        print(f"    [Time Check] Error checking match time: {e}. Assuming safe to proceed.")
+        return True
+
+async def place_bets_for_matches(page: Page, matched_urls: Dict[str, str], day_predictions: List[Dict], target_date: str):
+    """Visit matched URLs and place bets using prediction mappings."""
+    selected_bets = 0
+    processed_urls = set()
+    MAX_BETS = 50
+
+    for match_id, match_url in matched_urls.items():
+        if await get_bet_slip_count(page) >= MAX_BETS:
+            print(f"[Info] Slip full ({MAX_BETS}). Finalizing accumulator.")
+            await finalize_accumulator(page, target_date)
+
+        if not match_url or match_url in processed_urls: continue
+        
+        pred = next((p for p in day_predictions if str(p.get('fixture_id', '')) == str(match_id)), None)
+        if not pred or pred.get('prediction') == 'SKIP': continue
+
+        print(f"[Match Found] {pred['home_team']} vs {pred['away_team']}")
+        processed_urls.add(match_url)
+
+        try:
+            if page.is_closed():
+                print("  [Fatal] Page was closed before navigation. Aborting.")
+                from playwright.async_api import Error as PlaywrightError
+                raise PlaywrightError("Page closed before navigation")
+
+            print(f"    [Nav] Navigating to match: {match_url}")
+            await page.goto(match_url, wait_until='domcontentloaded', timeout=30000)
+
+            if page.is_closed():
+                print("  [Fatal] Page was closed immediately after navigation. Aborting.")
+                from playwright.async_api import Error as PlaywrightError
+                raise PlaywrightError("Page closed after navigation")
+
+            await asyncio.sleep(5)
+            # Corrected: Pass context string instead of URL
+            await neo_popup_dismissal(page, "fb_match_page") 
+            await ensure_bet_insights_collapsed(page)
+
+            # Check if match is within 10 minutes of starting
+            if not await check_match_start_time(page):
+                print(f"    [Info] Skipping {pred['home_team']} vs {pred['away_team']} - match not within 10 minutes of start")
+                update_prediction_status(match_id, target_date, 'skipped_time')
+                continue
+
+            # After successful navigation, get the main frame and place bets
+            frame = await get_main_frame(page)
+            if not frame:
+                print(f"    [Error] Could not get main frame for {match_url}")
+                update_prediction_status(match_id, target_date, 'dropped')
+                continue
+
+            m_name, o_name = await find_market_and_outcome(pred)
+            if not m_name:
+                print(f"    [Info] No market found for prediction: {pred.get('prediction', 'N/A')}")
+                update_prediction_status(match_id, target_date, 'dropped')
+                continue
+            
+            # Special handling for Draw No Bet abbreviation
+            search_market_name = m_name
+            if m_name.endswith("(DNB)"):
+                search_market_name = "Draw No Bet"
+                print(f"    [Betting] Adjusted search for {m_name} -> {search_market_name}")
+
+            # Special handling for Over/Under - try multiple search terms
+            search_terms = [search_market_name]
+            if search_market_name == "Goals Over/Under":
+                search_terms = ["Goals Over/Under", "Over/Under", "Total Goals", "Match Goals", "Goal Line"]
+
+            print(f"    [Betting] Looking for market '{search_market_name}' with outcome '{o_name}'")
+
+            # Find and click search icon using dynamic selector
+            search_sel = await get_selector_auto(page, "fb_match_page", "search_icon")
+            search_clicked = False
+            
+            if search_sel:
+                try:
+                    if await frame.locator(search_sel).count() > 0:
+                        await frame.locator(search_sel).first.click()
+                        print(f"    [Betting] Clicked search with selector: {search_sel}")
+                        search_clicked = True
+                        await asyncio.sleep(1)
+                except Exception as e:
+                    print(f"    [Betting] Search selector failed: {search_sel} - {e}")
+            else:
+                 print("    [Betting] Search selector missing in knowledge.json")
+
+            if not search_clicked:
+                print("    [Betting] Could not find search icon")
+                await capture_debug_snapshot(page, f"fail_search_icon_{match_id}", "Search icon selector not found or not clickable.")
+                continue
+
+            # Try each search term until we find the market
+            bet_selected = False
+            for search_term in search_terms:
+                print(f"    [Betting] Trying search term: '{search_term}'")
+
+                # Find and fill search input using dynamic selector
+                input_sel = await get_selector_auto(page, "fb_match_page", "search_input")
+                input_found = False
+
+                if input_sel:
+                    try:
+                        if await frame.locator(input_sel).count() > 0:
+                            search_input = frame.locator(input_sel).first
+                            # Clear previous input
+                            await search_input.fill("")
+                            await asyncio.sleep(0.5)
+                            await search_input.fill(search_term)
+                            await asyncio.sleep(0.5)
+                            await page.keyboard.press("Enter")
+                            print(f"    [Betting] Filled '{search_term}' and pressed Enter.")
+                            input_found = True
+                            await asyncio.sleep(3) # Wait for filter to apply
+                    except Exception as e:
+                        print(f"    [Betting] Input selector failed: {input_sel} - {e}")
+                else:
+                    print("    [Betting] Input selector missing in knowledge.json")
+
+                if not input_found:
+                    print("    [Betting] Could not find search input")
+                    continue
+
+                # Select Outcome using dynamic selector
+                row_container = await get_selector_auto(page, "fb_match_page", "outcome_row_container")
+
+                if row_container:
+                    # Check if we actually have any rows visible after search
+                    try:
+                        visible_rows = await frame.locator(row_container).count()
+                        if visible_rows == 0:
+                            print(f"    [Betting] No outcome rows visible after searching for '{search_term}'")
+                            continue
+                        print(f"    [Betting] Found {visible_rows} outcome rows after searching for '{search_term}'")
+                    except:
+                        pass
+
+                    # Construct specific selector - try different selectors for different markets
+                    if "Over" in o_name or "Under" in o_name:
+                        # For Over/Under, try button first, then div
+                        outcome_sel = f"button:has-text('{o_name}')"
+                        if await frame.locator(outcome_sel).count() == 0:
+                            outcome_sel = f"div:has-text('{o_name}')"
+                        if await frame.locator(outcome_sel).count() == 0:
+                            outcome_sel = f"span:has-text('{o_name}')"
+                    else:
+                        outcome_sel = f"{row_container} > div:has-text('{o_name}')"
+                    try:
+                        outcome_count = await frame.locator(outcome_sel).count()
+                        if outcome_count > 0:
+                            print(f"    [Betting] Found {outcome_count} matches for outcome '{o_name}'")
+                            count_before = await get_bet_slip_count(page)
+                            if await robust_click(frame.locator(outcome_sel).first, page):
+                                await asyncio.sleep(2)
+                                if await get_bet_slip_count(page) > count_before:
+                                    selected_bets += 1
+                                    update_prediction_status(match_id, target_date, 'booked')
+                                    # Sync with Registry
+                                    site_id = get_site_match_id(target_date, pred['home_team'], pred['away_team'])
+                                    update_site_match_status(site_id, 'booked', fixture_id=match_id)
+
+                                    print(f"    [Success] Added bet for {pred['home_team']} vs {pred['away_team']}")
+                                    bet_selected = True
+                                    break  # Exit search term loop
+                        else:
+                            print(f"    [Betting] Outcome '{o_name}' not found in rows for '{search_term}'")
+                    except Exception as e:
+                        print(f"    [Betting] Outcome selector failed: {outcome_sel} - {e}")
+                else:
+                     print("    [Betting] Outcome row container missing in knowledge.json")
+
+            if bet_selected:
+                continue
+
+            print(f"    [Info] Could not place bet for {pred['home_team']} vs {pred['away_team']}")
+            await capture_debug_snapshot(page, f"fail_outcome_{match_id}", f"Market: {search_market_name}, Outcome: {o_name} not found.")
+            update_prediction_status(match_id, target_date, 'dropped')
+
+        except Exception as e:
+            print(f"    [Error] Match failed: {e}")
+            # Check for Playwright-specific errors indicating page/browser closure
+            from playwright.async_api import Error as PlaywrightError
+            error_msg = str(e).lower()
+            is_closure_error = (
+                "target closed" in error_msg or 
+                "browser has been closed" in error_msg or 
+                "context was closed" in error_msg or
+                "page has been closed" in error_msg
+            )
+            if is_closure_error or isinstance(e, PlaywrightError):
+                print("    [Fatal] Browser or Page closed during betting loop. Aborting.")
+                raise e
+
+    final_slip_count = await get_bet_slip_count(page)
+    print(f"  [Summary] Selected {final_slip_count} bets for {target_date}.")
+    if final_slip_count > 0:
+        await finalize_accumulator(page, target_date)
+
+async def finalize_accumulator(page: Page, target_date: str) -> bool:
+    """Navigate to slip, enter stake, and confirm placement."""
+    print(f"[Betting] Finalizing accumulator for {target_date}...")
+    try:
+        await dismiss_overlays(page)
+        await handle_page_overlays(page)
+        # Refresh state after dismissals
+        await asyncio.sleep(1)
+        await page.keyboard.press("End")
+        
+        # Check if slip is open
+        drawer_sel = await get_selector_auto(page, "fb_match_page", "slip_drawer_container")
+        is_open = False
+        if drawer_sel:
+             is_open = await page.locator(drawer_sel).first.is_visible(timeout=500)
+
+        if not is_open:
+            trigger_sel = await get_selector_auto(page, "fb_match_page", "slip_trigger_button")
+            if trigger_sel:
+                if await robust_click(page.locator(trigger_sel).first, page):
+                    await asyncio.sleep(3)
+            else:
+                print("    [Betting] Slip trigger selector missing")
+
+        # Ensure 'Multiple' tab is selected for accumulators
+        multi_sel = await get_selector_auto(page, "fb_match_page", "slip_tab_multiple")
+        
+        if multi_sel and await page.locator(multi_sel).count() > 0:
+            if await page.locator(multi_sel).is_visible(timeout=2000):
+                await page.locator(multi_sel).click()
+                await asyncio.sleep(1)
+
+        # Enter Stake
+        stake_sel = await get_selector_auto(page, "fb_match_page", "stake_input")
+        stake_entered = False
+        
+        if stake_sel:
+            try:
+                if await page.locator(stake_sel).count() > 0:
+                    input_field = page.locator(stake_sel).first
+                    await input_field.click()
+                    await input_field.fill("1")
+                    await page.keyboard.press("Enter")
+                    print(f"    [Betting] Entered stake with selector: {stake_sel}")
+                    stake_entered = True
+                    await asyncio.sleep(1)
+            except Exception as e:
+                print(f"    [Betting] Stake selector failed: {stake_sel} - {e}")
+
+        if not stake_entered:
+            print("    [Warning] Could not enter stake. Attempting to place anyway.")
+
+        # Place bet
+        place_sel = await get_selector_auto(page, "fb_match_page", "place_bet_button")
+        bet_placed = False
+        
+        if place_sel:
+            try:
+                if await robust_click(page.locator(place_sel).first, page):
+                    print(f"    [Betting] Clicked place bet with selector: {place_sel}")
+                    bet_placed = True
+                    await asyncio.sleep(2)
+            except Exception as e:
+                print(f"    [Betting] Place bet selector failed: {place_sel} - {e}")
+
+        if not bet_placed:
+            print("    [Betting] Could not place bet")
+            return False
+
+        # Confirm bet
+        confirm_sel = await get_selector_auto(page, "fb_match_page", "confirm_bet_button")
+        
+        if confirm_sel:
+            try:
+                if await page.locator(confirm_sel).count() > 0:
+                    await robust_click(page.locator(confirm_sel).first, page)
+                    print(f"    [Betting] Confirmed bet with selector: {confirm_sel}")
+                    await asyncio.sleep(3)
+                    
+                    # Extract and save booking code
+                    booking_code = await extract_booking_details(page)
+                    if booking_code and booking_code != "N/A":
+                        await save_booking_code(target_date, booking_code, page)
+                    
+                    print(f"    [Success] Placed for {target_date}")
+                    return True
+            except Exception as e:
+                 print(f"    [Betting] Confirm selector failed: {confirm_sel} - {e}")
+
+        print("    [Betting] Could not confirm bet")
         return False
+    except Exception as e:
+        await log_error_state(page, "finalize_fatal", e)
+    return False
+
+async def extract_booking_details(page: Page) -> str:
+    """Extract booking code using dynamic selector."""
+    code_sel = await get_selector_auto(page, "fb_match_page", "booking_code_text")
+    
+    if code_sel:
+        try:
+            if await page.locator(code_sel).count() > 0:
+                code = await page.locator(code_sel).first.inner_text()
+                if code and code.strip():
+                    print(f"    [Booking] Code: {code.strip()}")
+                    return code.strip()
+        except Exception as e:
+            print(f"    [Booking] Code selector failed: {code_sel} - {e}")
+            
+    print("    [Booking] Could not extract booking code")
+    return "N/A"
 
 
-async def extract_booking_info(page: Page) -> Tuple[str, str]:
+async def save_booking_code(target_date: str, booking_code: str, page: Page):
     """
-    Pulls code & URL from the Book Bet modal (v2.7).
-    Returns (code, url) or ("", "") if failed.
+    Save booking code to file and capture betslip screenshot.
+    Stores in DB/bookings.txt with timestamp and date association.
     """
-    modal_sel = SelectorManager.get_selector_strict("fb_match_page", "booking_code_modal")
-    code_sel = SelectorManager.get_selector_strict("fb_match_page", "booking_code_text")
+    from pathlib import Path
     
     try:
-        # Wait for modal
-        await page.wait_for_selector(modal_sel, state="visible", timeout=15000)
+        # Save to bookings file
+        db_dir = Path("DB")
+        db_dir.mkdir(exist_ok=True)
+        bookings_file = db_dir / "bookings.txt"
         
-        # Extract code with retries
-        code_text = ""
-        for _ in range(5):
-             code_text = (await page.locator(code_sel).first.inner_text(timeout=2000)).strip()
-             if code_text and len(code_text) >= 5:
-                 break
-             await asyncio.sleep(1)
+        timestamp = dt.now().strftime("%Y-%m-%d %H:%M:%S")
+        booking_entry = f"{timestamp} | Date: {target_date} | Code: {booking_code}\n"
         
-        if not code_text:
-            return "", ""
+        with open(bookings_file, "a", encoding="utf-8") as f:
+            f.write(booking_entry)
+        
+        print(f"    [Booking] Saved code {booking_code} to bookings.txt")
+        
+        # Capture betslip screenshot for records
+        try:
+            screenshot_path = db_dir / f"betslip_{booking_code}.png"
+            await page.screenshot(path=str(screenshot_path), full_page=True)
+            print(f"    [Booking] Saved screenshot to {screenshot_path.name}")
+        except Exception as screenshot_error:
+            print(f"    [Booking] Screenshot failed: {screenshot_error}")
             
-        booking_url = f"https://www.football.com/ng/m?shareCode={code_text}"
-        return code_text, booking_url
-
     except Exception as e:
-        print(f"    [Extraction Error] Modal extraction failed: {e}")
-        return "", ""
+        print(f"    [Booking] Failed to save booking code: {e}")
+

@@ -44,10 +44,12 @@ async def extract_league_matches(page: Page, target_date: str) -> List[Dict]:
                 league_element = header_locator.locator(league_title_sel).first
                 if await league_element.count() > 0:
                     league_text = (await league_element.inner_text(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)).strip().replace('\n', ' - ')
-                elif await header_locator.locator("h4").count() > 0:
-                    league_text = (await header_locator.locator("h4").first.inner_text()).strip().replace('\n', ' - ')
                 else:
-                    league_text = f"Unknown League {i+1}"
+                    fallback_tag = SelectorManager.get_selector_strict("fb_schedule_page", "league_header_fallback_tag")
+                    if fallback_tag and await header_locator.locator(fallback_tag).count() > 0:
+                        league_text = (await header_locator.locator(fallback_tag).first.inner_text()).strip().replace('\n', ' - ')
+                    else:
+                        league_text = f"Unknown League {i+1}"
                 
                 print(f"  -> Processing League {i+1}: {league_text}")
 

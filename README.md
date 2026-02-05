@@ -13,7 +13,7 @@ OVERVIEW:
 Leo combines advanced data analysis, machine learning, and automated execution. The system features a hybrid AI architecture using local Qwen3-VL for routine vision tasks and xAI's Grok 4 for high-precision selector discovery and complex UI mapping.
 
 LATEST UPDATES (v3.2.0):
-- **v2.7 Algorithm Compliance**: Full implementation of the "Harvest -> Execute" strategy for maximum reliability.
+- **Unified Execution Workflow**: Single-pass "Search & Place" strategy for maximum reliability and speed.
 - **Fractional Kelly Staking**: Precise risk-aware staking (0.25 * Kelly) clamped for bankroll safety.
 - **Centralized Audit Logging**: All financial movements and cycle statuses are logged to `DB/audit_log.csv`.
 - **Live Telegram Integration**: Semi-automated withdrawal flow and interactive monitoring.
@@ -23,8 +23,7 @@ LATEST UPDATES (v3.2.0):
 
 CORE ARCHITECTURE:
 - **Dual-Browser System**: Persistent login sessions for Flashscore and Football.com.
-- **Phase 2a (Harvest)**: Extracts individual booking codes from match URLs with odds verification (>= 1.20).
-- **Phase 2b (Execute)**: Builds and places multi-bet accumulators via shareCode injection.
+- **Phase 2 (Betting)**: Direct match navigation, dynamic market discovery, and real-time accumulator building.
 - **Self-Healing UI**: Automated selector discovery via Grok 4 and robust slip clearing with fatal escalation.
 - **Modular Data Layer**: Optimized CSV storage with absolute pathing and centralized audit trails.
 
@@ -37,10 +36,10 @@ MAIN WORKFLOW:
    - **Phase 0 (Review)**: Cross-syncs past outcomes and updates momentum weights.
    - **Phase 1 (Analysis)**: Generates high-confidence predictions via the Rule Engine.
 
-3. ACT: PHASE 2 (Harvest -> Execute):
-   - **Phase 2a (Harvest)**: Navigates to prediction URLs and extracts booking codes.
-   - **Phase 2b (Execute)**: Injects codes via URL to build a multi-bet and places it using Kelly staking.
-   - **Financial Safety**: Every placement is verified by balance delta checks and logged to an audit file.
+3. ACT: PHASE 2 (Betting Orchestration):
+   - **Phase 2 (Execution)**: Single-pass orchestration via `place_bets_for_matches()`.
+   - **Logic**: Navigates, checks start time, finds markets via dynamic sectors, and builds accumulator directly.
+   - **Financial Safety**: Stake is entered and confirmed. Codes are extracted post-placement for audit.
 
 4. VERIFY & WITHDRAW (Phase 3):
    - **Withdrawal**: Checks triggers (₦10k balance) and maintained bankroll floor (₦5,000).

@@ -67,29 +67,26 @@ flowchart TD
         FB_LOGIN --> FB_BAL["Extract Balance<br/>(Store in global state)"]
         
         FB_BAL --> FB_HARVEST_P["<b>Phase 2a: Harvest Flow</b>"]
-        subgraph Harvest_Sub [Harvest Detail]
+        subgraph Harvest_Sub [Betting Process]
             FB_HARVEST_P --> FB_URL["<b>URL Resolver</b><br/>Search site for matches<br/>(Modules.FootballCom.fb_url_resolver)"]
-            FB_URL --> FB_MATCHER["<b>Matcher Component</b><br/>Semantic Matcher (LLM threshold 0.60)<br/>Normalization (Brazilian state suffixes)"]
+            FB_URL --> FB_MATCHER["<b>Matcher Component</b><br/>Semantic Matcher"]
             FB_MATCHER --> FB_H_LOOP{"Match Loop"}
             
-            FB_H_LOOP -->|Process| FB_CLEAR["Aggressive Betslip Clear<br/>Modules.FootballCom.booker.slip"]
-            FB_CLEAR --> FB_NAV_U["Navigate to Fixture URL"]
-            FB_NAV_U --> FB_SEARCH_M["<b>Market Discovery</b><br/>Search for Market (e.g., HT/FT, O/U)<br/>Locate Outcome Button"]
-            FB_SEARCH_M --> FB_ODDS{"Odds Check<br/>(Min 1.20?)"}
-            FB_ODDS -->|Pass| FB_BOOK["Book Bet Selection<br/>Extract 6-8 digit code"]
-            FB_BOOK --> FB_SAVE_S["Save to site_matches.csv<br/>(fixture_id, code, date, odds)"]
-            FB_ODDS -->|Fail| FB_SKIP["Update status: skipped_low_odds"]
-            FB_H_LOOP -->|Next| FB_SAVE_S
+            FB_H_LOOP -->|Process| FB_NAV_U["Navigate to Fixture URL"]
+            FB_NAV_U --> FB_TIME{"Time Check<br/>10 min window?"}
+            FB_TIME -->|No| FB_SKIP_T["Skip: Too late/early"]
+            FB_TIME -->|Yes| FB_SEARCH_M["<b>Market Search</b><br/>Search Market/Outcome<br/>(Dynamic Selectors)"]
+            
+            FB_SEARCH_M --> FB_CLICK["Select Outcome (Click)"]
+            FB_CLICK --> FB_CHECK_SLIP{"Slip Full?<br/>(>=50 bets)"}
+            
+            FB_CHECK_SLIP -->|Yes| FB_FINALIZE["<b>Finalize Accumulator</b><br/>Enter Stake -> Place Bet<br/>Extract Code"]
+            FB_CHECK_SLIP -->|No| FB_H_LOOP
+            
+            FB_FINALIZE --> FB_H_LOOP
         end
         
-        Harvest_Sub --> FB_EXEC_P["<b>Phase 2b: Execution Flow</b>"]
-        subgraph Execute_Sub [Placement Detail]
-            FB_EXEC_P --> FB_LOAD_C["Load Harvested Codes for Date<br/>(Data.Access.db_helpers)"]
-            FB_LOAD_C --> FB_RE_ADD["Batch Add Codes to Slip"]
-            FB_RE_ADD --> FB_STAKE["<b>Staking Strategy</b><br/>Fractional Kelly (c=0.25)<br/>Stake = Balance * 0.25 * GainPerc"]
-            FB_STAKE --> FB_PLACE["Confirm & Place Accumulated Bet"]
-            FB_PLACE --> FB_LOG["Update audit_log.csv<br/>(Status: PLACED)"]
-        end
+        Harvest_Sub --> FB_LOG["Update Audit Log"]
     end
     Booking_Process --> PHASE3
 

@@ -68,7 +68,7 @@ async def find_market_and_outcome(prediction: Dict) -> tuple:
         if match:
             line = match.group(2)
             type_str = match.group(1).title()
-            return "Goals Over/Under", f"{type_str} {line}"
+            return "Over/Under", f"{type_str} {line}"
 
     # --- 6. Goal Range ---
     if "GOALS" in pt_upper and "-" in pt_upper:
