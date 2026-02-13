@@ -39,8 +39,8 @@ from Data.Access.db_helpers import (
 from Data.Access.outcome_reviewer import smart_parse_datetime
 
 # Configuration
-CONCURRENCY = 3  # Reduced for stability in Codespaces
-BATCH_SIZE = 30  # Report progress more frequently
+CONCURRENCY = 3  # Reduced for stability (prevents "Page crashed")
+BATCH_SIZE = 50  # Process more matches per browser restart
 KNOWLEDGE_PATH = Path(__file__).parent.parent / "Config" / "knowledge.json"
 
 # Standings extraction JS — identical to standings_extractor.py but self-contained
@@ -375,6 +375,7 @@ async def enrich_batch(playwright: Playwright, matches: List[Dict], batch_num: i
             page.set_default_navigation_timeout(45000)
             task = extract_match_enrichment(page, match['match_link'], sel, extract_standings)
             tasks.append((page, task))
+            await asyncio.sleep(0.5) # Slight stagger to prevent CPU spikes
 
         # Wait for all tasks
         chunk_results = await asyncio.gather(*[t for _, t in tasks], return_exceptions=True)
@@ -475,6 +476,7 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
     sync_buffer_schedules = []
     sync_buffer_teams = []
     sync_buffer_leagues = []
+    sync_buffer_standings = []
 
     async with async_playwright() as playwright:
         for batch_idx in range(0, len(to_enrich), BATCH_SIZE):
@@ -553,10 +555,7 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                                 row['url'] = s_url or match.get('league_url', '')
                             save_standings(s_data, s_league)
                             standings_saved += len(s_data)
-                            # TODO: Buffer standings sync? (Not requested explicitly but good practice)
-                            # SyncManager doesn't support standings table yet in config? 
-                            # User said "all data files, including... standings"
-                            # I should add standings to sync manager later.
+                            sync_buffer_standings.extend(s_data)
 
                     # --- Backfill prediction if requested ---
                     if backfill_predictions and match.get('fixture_id'):
@@ -592,6 +591,9 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                     if sync_buffer_leagues:
                         await sync_manager.batch_upsert('region_league', sync_buffer_leagues)
                         sync_buffer_leagues = []
+                    if sync_buffer_standings:
+                        await sync_manager.batch_upsert('standings', sync_buffer_standings)
+                        sync_buffer_standings = []
 
             print(f"   [+] Enriched {len(enriched_batch)} matches")
             print(f"   [+] Teams: {len(teams_added)}, Leagues: {len(leagues_added)}")
@@ -609,6 +611,8 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                 await sync_manager.batch_upsert('teams', sync_buffer_teams)
             if sync_buffer_leagues:
                 await sync_manager.batch_upsert('region_league', sync_buffer_leagues)
+            if sync_buffer_standings:
+                await sync_manager.batch_upsert('standings', sync_buffer_standings)
 
     # Summary
     print("\n" + "=" * 80)
