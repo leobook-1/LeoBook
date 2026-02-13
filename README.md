@@ -1,9 +1,9 @@
 # Leo
-**Manufacturer**: Materialless LLC  
+**Manufacturer**: Emenike Chinenye James (Materialless LLC)  
 **Powered by**: Grok 4.1 & Gemini 3
 
-"""
-Leo v3.2: Elite Autonomous Betting Agent (Manufacturer: Materialless LLC)
+## PROLOGUE
+Leo v5.0: The refined, autonomous betting ecosystem. This system represents the pinnacle of self-healing automation, combining multi-path AIGO recovery with strategic AI analysis to maintain continuous betting operations under dynamic UI conditions.
 
 A comprehensive AI-powered system that observes, analyzes, predicts, and executes betting strategies with advanced self-healing capabilities.
 
@@ -39,10 +39,10 @@ SUPPORTED BETTING MARKETS:
 
 SYSTEM COMPONENTS:
 - **Leo.py**: Main controller orchestrating the "Observe, Decide, Act" core loop.
-- **Core/**: The Brain (Intelligence, Visual Analyzer, System primitives, Browser helpers).
-- **Data/**: Central data layer (Persistence, Access, DB helpers).
-- **Modules/**: Site-specific integrations (Flashscore, Football.com).
-- **leobookapp/**: Pilot X Mobile/Web App.
+- **Core/**: System Intelligence (AIGO Engine, Page/Visual Analysis, System Primitives).
+- **Data/**: Persistence Layer (Supabase Sync, CSV Storage, DB Helpers).
+- **Modules/**: Browser Automation (Flashscore Extractors, Football.com Interaction).
+- **LeoBookApp/**: Cross-Platform Elite Betting Dashboard (Flutter).
 # LeoBook - Elite Betting Dashboard
 
 Elite, autonomous betting dashboard with direct GitHub data synchronization and persistent local caching.
@@ -62,4 +62,3 @@ MAINTENANCE:
 - Review **`walkthrough.md`** for detailed implementation logs of current session.
 - Refer to **`pilot_algorithm.md`** for exhaustive file and function documentation.
 - Use `python Scripts/sync_to_supabase.py` to push latest predictions to the cloud.
-"""

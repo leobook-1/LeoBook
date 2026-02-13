@@ -23,7 +23,6 @@ from ..Utils.utils import LOG_DIR
 from .html_utils import clean_html_content
 from .selector_mapping import map_visuals_to_selectors
 from .selector_utils import simplify_selectors
-from .recovery import attempt_visual_recovery
 
 # --- Vision Integration ---
 
@@ -242,7 +241,3 @@ class VisualAnalyzer:
     @staticmethod
     def simplify_selectors(selectors: Dict[str, str], html_content: str) -> Dict[str, str]:
         return simplify_selectors(selectors, html_content)
-
-    @staticmethod
-    async def attempt_visual_recovery(page, context_name: str) -> bool:
-        return await attempt_visual_recovery(page, context_name)

@@ -28,8 +28,9 @@ async def analyze_page_and_update_selectors(page, context_key: str, force_refres
 
 
 async def attempt_visual_recovery(page, context_name: str) -> bool:
-    """Delegate to VisualAnalyzer"""
-    return await VisualAnalyzer.attempt_visual_recovery(page, context_name)
+    """Legacy recovery stub - AIGO V5 now handles all self-healing/recovery."""
+    print(f"    [AI RECOVERY] Legacy attempt_visual_recovery called for {context_name}. AIGO V5 should be used instead.")
+    return False
 
 
 def get_selector(context: str, element_key: str) -> str:
