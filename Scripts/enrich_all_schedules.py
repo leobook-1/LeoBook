@@ -42,8 +42,8 @@ from Modules.Flashscore.fs_utils import retry_extraction
 from Core.Utils.constants import NAVIGATION_TIMEOUT, WAIT_FOR_LOAD_STATE_TIMEOUT
 
 # Configuration
-CONCURRENCY = 3  # Reduced for stability (prevents "Page crashed")
-BATCH_SIZE = 50  # Process more matches per browser restart
+CONCURRENCY = int(os.getenv('ENRICH_CONCURRENCY', 2))  # Default 2 for stability
+BATCH_SIZE = int(os.getenv('ENRICH_BATCH_SIZE', 30))   # Report progress more frequently
 KNOWLEDGE_PATH = Path(__file__).parent.parent / "Config" / "knowledge.json"
 
 # Selective dynamic selectors will still be used but Core/ extracts will handle standings
