@@ -1,41 +1,37 @@
 -- GLOBAL SUPABASE SCHEMA (LeoBook)
 -- This file serves as the single source of truth for the database schema.
--- It includes Data Stores, User Management, and the Custom Rule Engine.
+-- v1.1: Added robust ALTER TABLE statements to handle existing tables.
 
 -- =============================================================================
 -- 1. EXTENSIONS & SETUP
 -- =============================================================================
--- Enable UUID generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- =============================================================================
 -- 2. USER MANAGEMENT (Public Profiles)
 -- =============================================================================
--- Links to built-in auth.users
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
     email TEXT,
     username TEXT UNIQUE,
     full_name TEXT,
     avatar_url TEXT,
-    tier TEXT DEFAULT 'free', -- 'free', 'pro', 'elite'
+    tier TEXT DEFAULT 'free',
     credits INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- RLS: Users can view their own profile, maybe others' public info
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own profile" 
-ON public.profiles FOR SELECT 
-USING (auth.uid() = id);
+-- Migration checks for profiles
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
-CREATE POLICY "Users can update own profile" 
-ON public.profiles FOR UPDATE 
-USING (auth.uid() = id);
+CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
--- Trigger to create profile on signup
+-- Trigger for new user
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS TRIGGER AS $$
 BEGIN
@@ -45,58 +41,48 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Drop trigger if exists to avoid duplication errors on re-run
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 -- =============================================================================
 -- 3. CUSTOM RULE ENGINE
 -- =============================================================================
--- Stores user-defined prediction rules / strategies
 CREATE TABLE IF NOT EXISTS public.custom_rules (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL,
     description TEXT,
     is_active BOOLEAN DEFAULT true,
-    
-    -- The Logic: Stored as JSONB for flexibility
-    -- Example: { "conditions": [{"field": "xg_home", "op": ">", "val": 1.5}], "response": "BET_HOME" }
     logic JSONB DEFAULT '{}'::jsonb NOT NULL,
-    
     priority INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 ALTER TABLE public.custom_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.custom_rules ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
-CREATE POLICY "Users can fully manage own rules" 
-ON public.custom_rules FOR ALL 
-USING (auth.uid() = user_id);
+CREATE POLICY "Users can fully manage own rules" ON public.custom_rules FOR ALL USING (auth.uid() = user_id);
 
--- Stores the execution history / hits of these rules
 CREATE TABLE IF NOT EXISTS public.rule_executions (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     rule_id UUID REFERENCES public.custom_rules(id) ON DELETE CASCADE,
-    fixture_id TEXT, -- References schedules(fixture_id)
+    fixture_id TEXT,
     user_id UUID REFERENCES public.profiles(id),
-    result JSONB, -- What the rule decided
-    executed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    result JSONB,
+    executed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 ALTER TABLE public.rule_executions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rule_executions ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
-CREATE POLICY "Users can view own rule executions" 
-ON public.rule_executions FOR SELECT 
-USING (auth.uid() = user_id);
+CREATE POLICY "Users can view own rule executions" ON public.rule_executions FOR SELECT USING (auth.uid() = user_id);
 
 -- =============================================================================
 -- 4. DATA STORE (Core Tables)
 -- =============================================================================
--- Syncs with local CSVs via SyncManager
 
 -- Region/League
 CREATE TABLE IF NOT EXISTS public.region_league (
@@ -111,8 +97,8 @@ CREATE TABLE IF NOT EXISTS public.region_league (
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.region_league ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.region_league ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 CREATE POLICY "Public Read Access RegionLeague" ON public.region_league FOR SELECT USING (true);
-CREATE POLICY "Service Role Sync RegionLeague" ON public.region_league FOR ALL USING (true); -- Ideally restrict to service_role
 
 -- Teams
 CREATE TABLE IF NOT EXISTS public.teams (
@@ -124,6 +110,7 @@ CREATE TABLE IF NOT EXISTS public.teams (
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.teams ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 CREATE POLICY "Public Read Access Teams" ON public.teams FOR SELECT USING (true);
 
 -- Schedules
@@ -144,6 +131,9 @@ CREATE TABLE IF NOT EXISTS public.schedules (
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
+-- CRITICAL FIX: Ensure 'status' column exists if table was created in an older version
+ALTER TABLE public.schedules ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE public.schedules ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 CREATE POLICY "Public Read Access Schedules" ON public.schedules FOR SELECT USING (true);
 
 -- Predictions
@@ -187,6 +177,7 @@ CREATE TABLE IF NOT EXISTS public.predictions (
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.predictions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.predictions ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 CREATE POLICY "Public Read Access Predictions" ON public.predictions FOR SELECT USING (true);
 
 -- Standings
@@ -208,16 +199,41 @@ CREATE TABLE IF NOT EXISTS public.standings (
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.standings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.standings ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 CREATE POLICY "Public Read Access Standings" ON public.standings FOR SELECT USING (true);
+
+-- FB Matches
+CREATE TABLE IF NOT EXISTS public.fb_matches (
+    site_match_id TEXT PRIMARY KEY,
+    date TEXT,
+    time TEXT,
+    home_team TEXT,
+    away_team TEXT,
+    league TEXT,
+    url TEXT,
+    last_extracted TEXT,
+    fixture_id TEXT,
+    matched TEXT,
+    odds TEXT,
+    booking_status TEXT,
+    booking_details TEXT,
+    booking_code TEXT,
+    booking_url TEXT,
+    status TEXT,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+ALTER TABLE public.fb_matches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.fb_matches ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+CREATE POLICY "Public Read Access FBMatches" ON public.fb_matches FOR SELECT USING (true);
 
 -- =============================================================================
 -- 5. UTILITY & MAINTENANCE
 -- =============================================================================
--- Auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
    NEW.updated_at = NOW();
+   NEW.last_updated = NOW(); -- Also update last_updated
    RETURN NEW;
 END;
 $$ language 'plpgsql';
