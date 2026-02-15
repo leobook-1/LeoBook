@@ -26,11 +26,14 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
+import pandas as pd
+import re
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from playwright.async_api import Playwright, async_playwright, Browser
+from Data.Access.sync_manager import SyncManager, run_full_sync
 from Data.Access.db_helpers import (
     SCHEDULES_CSV, TEAMS_CSV, REGION_LEAGUE_CSV, STANDINGS_CSV, PREDICTIONS_CSV,
     save_team_entry, save_region_league_entry, save_schedule_entry,
@@ -230,7 +233,8 @@ async def extract_match_enrichment(page, match_url: str, sel: Dict[str, str],
 
 
 async def process_match_task_isolated(browser: Browser, match: Dict, sel: Dict[str, str], extract_standings: bool) -> Dict:
-    """Worker to enrich a single match within its own context."""
+    """Worker to enrich a single match within its own context with failure diagnostics."""
+    fixture_id = match.get('fixture_id', 'unknown')
     try:
         context = await browser.new_context(
             viewport={'width': 1280, 'height': 720},
@@ -242,26 +246,41 @@ async def process_match_task_isolated(browser: Browser, match: Dict, sel: Dict[s
             enriched = await extract_match_enrichment(page, match['match_link'], sel, extract_standings)
             if enriched:
                 match.update(enriched)
+            else:
+                # AIGO Fallback: Capture diagnostics on extraction failure
+                log_dir = Path("Data/Logs/EnrichmentFailures") / fixture_id
+                log_dir.mkdir(parents=True, exist_ok=True)
+                
+                screenshot_path = log_dir / "failure.png"
+                html_path = log_dir / "source.html"
+                
+                await page.screenshot(path=str(screenshot_path))
+                with open(html_path, "w", encoding='utf-8') as f:
+                    f.write(await page.content())
+                
+                print(f"      [AIGO Fallback] Extraction failed for {fixture_id}. Diagnostics saved to {log_dir}")
+                
         except Exception as e:
             # print(f"      [ISOLATION INFO] Failed to enrich {match.get('fixture_id')}: {str(e)[:100]}")
             pass
         finally:
             await context.close()
     except Exception as e:
-        print(f"      [ISOLATION CRITICAL] Context creation failed: {e}")
+        print(f"      [ISOLATION CRITICAL] Context creation failed for {fixture_id}: {e}")
     
     return match
 
 
 async def enrich_batch(playwright: Playwright, matches: List[Dict], batch_num: int,
-                       sel: Dict[str, str], extract_standings: bool = False) -> List[Dict]:
+                       sel: Dict[str, str], extract_standings: bool = False,
+                       concurrency: int = 5) -> List[Dict]:
     """Process a batch of matches with isolated contexts and throttled concurrency."""
     browser = await playwright.chromium.launch(
         headless=True,
         args=['--disable-gpu', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     )
     
-    semaphore = asyncio.Semaphore(CONCURRENCY)
+    semaphore = asyncio.Semaphore(concurrency)
 
     async def worker(match):
         async with semaphore:
@@ -276,7 +295,63 @@ async def enrich_batch(playwright: Playwright, matches: List[Dict], batch_num: i
     return list(results)
 
 
-from Data.Access.sync_manager import SyncManager
+def analyze_metadata_gaps(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Scans for gaps in schedules metadata:
+    - Missing home_team_id / away_team_id
+    - Unknown or empty region_league
+    - Malformed or merged datetime strings
+    """
+    dt_pattern = r"^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$"
+    
+    # 1. Check ID gaps
+    id_gap = (df['home_team_id'] == '') | (df['away_team_id'] == '')
+    
+    # 2. Check Region/League gaps
+    rl_gap = (df['region_league'].str.contains('Unknown', case=False)) | (df['region_league'] == '')
+    
+    # 3. Check Datetime gaps (merged strings)
+    # If match_time is like "14.02.2026 20:30", it needs splitting/fixing
+    dt_malformed = ~df['match_time'].str.match(dt_pattern) & (df['match_time'] != '') & (df['match_time'].str.len() > 5)
+    
+    gaps_df = df[id_gap | rl_gap | dt_malformed]
+    return gaps_df
+
+
+async def resolve_metadata_gaps(df: pd.DataFrame, sync_manager: SyncManager) -> pd.DataFrame:
+    """
+    Attempts to resolve missing metadata by merging with the latest data from Supabase.
+    """
+    print(f"  [METADATA] Attempting to resolve gaps via Supabase merge...")
+    
+    # Fetch all schedules from Supabase (the source of truth)
+    try:
+        remote_df = await sync_manager.supabase.table('schedules').select('*').execute()
+        if not remote_df.data:
+            return df
+        
+        df_remote = pd.DataFrame(remote_df.data).fillna('')
+        if df_remote.empty:
+            return df
+
+        # We merge back into local df based on fixture_id
+        # We only want to fill gaps, so we use combine_first or update
+        df.set_index('fixture_id', inplace=True)
+        df_remote.set_index('fixture_id', inplace=True)
+        
+        # Standardize remote columns to match CSV headers
+        # Supabase uses snake_case, but our table_config/sync_manager should handle alignment.
+        # Actually, let's just use update for keys that are missing in local
+        df.update(df_remote, overwrite=False) # Only fill missing values
+        
+        df.reset_index(inplace=True)
+        print(f"  [SUCCESS] Metadata resolution complete.")
+    except Exception as e:
+        print(f"  [WARNING] Remote metadata resolution failed: {e}")
+        
+    return df
+
+
 
 # ...
 
@@ -301,11 +376,18 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
     print(f"  Concurrency: {CONCURRENCY}")
     print(f"  Batch Size: {BATCH_SIZE}")
     print("=" * 80)
+    print("  PROLOGUE PHASE 1: CLOUD HANDSHAKE & SYNC")
+    print("  Goal: Establish data parity between local CSVs and Supabase.")
+    print("=" * 80)
 
     # Initialize Sync Manager
     sync_manager = SyncManager()
     if not dry_run:
+        print("[INFO] Initiating Bi-Directional Cloud Handshake...")
         await sync_manager.sync_on_startup()
+        print("[SUCCESS] Cloud Handshake Complete. Local and Remote systems are in sync.")
+    else:
+        print("[DRY-RUN] Skipping Cloud Handshake.")
 
     # Load selectors
     if not KNOWLEDGE_PATH.exists():
@@ -318,22 +400,45 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
     
     print(f"[INFO] Loaded {len(sel)} selectors from knowledge.json (fs_match_page)")
 
-    # Load ALL matches
-    with open(SCHEDULES_CSV, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        all_matches = list(reader)
+    # --- PROLOGUE PAGE 2: MISSING METADATA ANALYSIS ---
+    print("\n" + "=" * 80)
+    print("  PROLOGUE PAGE 2: MISSING METADATA ANALYSIS")
+    print("  Goal: Identify and resolve fixture gaps using Pandas & Cloud Merge.")
+    print("=" * 80)
+
+    # Load with Pandas for Analysis
+    df_schedules = pd.read_csv(SCHEDULES_CSV, dtype=str).fillna('')
     
-    # Filter matches that need enrichment
+    gaps_found = analyze_metadata_gaps(df_schedules)
+    print(f"[INFO] Initial scan found {len(gaps_found)} fixtures with structural metadata gaps.")
+    
+    if len(gaps_found) > 0 and not dry_run:
+        df_schedules = await resolve_metadata_gaps(df_schedules, sync_manager)
+        # Re-scan after resolution
+        gaps_found = analyze_metadata_gaps(df_schedules)
+        print(f"[INFO] Post-resolution gaps: {len(gaps_found)}")
+        
+        # Save resolved data
+        df_schedules.to_csv(SCHEDULES_CSV, index=False, encoding='utf-8')
+
+    # Convert to list of dicts for the enrichment loop
+    all_matches = df_schedules.to_dict('records')
+    
+    # Filter matches that STILL need enrichment (deep scrape)
     to_enrich = [
         m for m in all_matches
         if m.get('match_link') and (
             not m.get('home_team_id') or
             not m.get('away_team_id') or
             m.get('region_league') in ('Unknown', 'N/A', '') or
-            len(m.get('match_time', '')) > 5 or  # Fix merged date-times "DD.MM.YYYY HH:MM"
+            len(m.get('match_time', '')) > 5 or
             m.get('match_time') in ('Unknown', 'N/A', '')
         )
     ]
+
+    # Calculate auto-scaling concurrency (2-5)
+    calc_concurrency = max(2, min(5, len(to_enrich) // 20))
+    print(f"  [AUTO-SCALE] Concurrency set to: {calc_concurrency}")
 
     if limit:
         to_enrich = to_enrich[:limit]
@@ -359,152 +464,140 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
     sync_buffer_standings = []
 
     async with async_playwright() as playwright:
-        for batch_idx in range(0, len(to_enrich), BATCH_SIZE):
-            batch = to_enrich[batch_idx:batch_idx + BATCH_SIZE]
-            batch_num = (batch_idx // BATCH_SIZE) + 1
+        try:
+            for batch_idx in range(0, len(to_enrich), BATCH_SIZE):
+                batch = to_enrich[batch_idx:batch_idx + BATCH_SIZE]
+                batch_num = (batch_idx // BATCH_SIZE) + 1
 
-            print(f"\n[BATCH {batch_num}/{total_batches}] Processing {len(batch)} matches...")
+                print(f"\n[BATCH {batch_num}/{total_batches}] Processing {len(batch)} matches...")
 
-            enriched_batch = await enrich_batch(playwright, batch, batch_num, sel, extract_standings)
+                enriched_batch = await enrich_batch(playwright, batch, batch_num, sel, extract_standings, calc_concurrency)
 
+                if not dry_run:
+                    # Save enriched data
+                    for match in enriched_batch:
+                        # Update schedule
+                        save_schedule_entry(match)
+                        sync_buffer_schedules.append(match)
+
+                        # Build rl_id for team -> league mapping
+                        rl_id = match.get('rl_id', '')
+                        region = match.get('region', '')
+                        league = match.get('league', '')
+                        if not rl_id and region and league:
+                            rl_id = f"{region}_{league}".replace(' ', '_').replace('-', '_').upper()
+
+                        # Upsert home team with ALL columns
+                        if match.get('home_team_id'):
+                            home_team_data = {
+                                'team_id': match['home_team_id'],
+                                'team_name': match.get('home_team_name', match.get('home_team', 'Unknown')),
+                                'rl_ids': rl_id,
+                                'team_crest': match.get('home_team_crest', ''),
+                                'team_url': match.get('home_team_url', '')
+                            }
+                            save_team_entry(home_team_data)
+                            teams_added.add(match['home_team_id'])
+                            sync_buffer_teams.append(home_team_data)
+
+                        # Upsert away team with ALL columns
+                        if match.get('away_team_id'):
+                            away_team_data = {
+                                'team_id': match['away_team_id'],
+                                'team_name': match.get('away_team_name', match.get('away_team', 'Unknown')),
+                                'rl_ids': rl_id,
+                                'team_crest': match.get('away_team_crest', ''),
+                                'team_url': match.get('away_team_url', '')
+                            }
+                            save_team_entry(away_team_data)
+                            teams_added.add(match['away_team_id'])
+                            sync_buffer_teams.append(away_team_data)
+
+                        # Upsert region_league with ALL columns
+                        if rl_id:
+                            league_data = {
+                                'rl_id': rl_id,
+                                'region': region,
+                                'region_flag': match.get('region_flag', ''),
+                                'region_url': match.get('region_url', ''),
+                                'league': league,
+                                'league_url': match.get('league_url', ''),
+                                'league_crest': ''  # Not available on match page
+                            }
+                            save_region_league_entry(league_data)
+                            leagues_added.add(rl_id)
+                            sync_buffer_leagues.append(league_data)
+
+                        # --- Save standings if extracted ---
+                        standings_result = match.pop('_standings_data', None)
+                        if standings_result:
+                            s_data = standings_result.get('standings', [])
+                            s_league = standings_result.get('region_league', 'Unknown')
+                            s_url = standings_result.get('league_url', '')
+                            if s_league == 'Unknown' and match.get('region_league'):
+                                s_league = match['region_league']
+                            if s_data and s_league != 'Unknown':
+                                for row in s_data:
+                                    row['url'] = s_url or match.get('league_url', '')
+                                save_standings(s_data, s_league)
+                                standings_saved += len(s_data)
+                                sync_buffer_standings.extend(s_data)
+
+                        # --- Backfill prediction if requested ---
+                        if backfill_predictions and match.get('fixture_id'):
+                            region_league = match.get('region_league', '')
+                            updates = {}
+                            if region_league and region_league != 'Unknown':
+                                updates['region_league'] = region_league
+                            if match.get('home_team_crest'):
+                                updates['home_crest_url'] = match['home_team_crest']
+                            if match.get('away_team_crest'):
+                                updates['away_crest_url'] = match['away_team_crest']
+                            if match.get('match_link'):
+                                updates['match_link'] = match['match_link']
+                            if updates:
+                                was_updated = backfill_prediction_entry(match['fixture_id'], updates)
+                                if was_updated:
+                                    predictions_backfilled += 1
+                                    # We should sync updated predictions too.
+                                    # But backfill_prediction_entry doesn't return the full row.
+                                    # This is complex. For now, rely on sync-on-startup or nightly sync.
+                                    # asyncio.create_task(sync_manager.batch_upsert('predictions', [row]))
+
+                        enriched_count += 1
+                    
+                    # --- PERIODIC SYNC (Every batch - fulfills "every 10 extractions") ---
+                    if not dry_run:
+                        print(f"   [SYNC] Upserting buffered data for batch {batch_num} to Supabase...")
+                        if sync_buffer_schedules:
+                            await sync_manager.batch_upsert('schedules', sync_buffer_schedules)
+                            sync_buffer_schedules = []
+                        if sync_buffer_teams:
+                            await sync_manager.batch_upsert('teams', sync_buffer_teams)
+                            sync_buffer_teams = []
+                        if sync_buffer_leagues:
+                            await sync_manager.batch_upsert('region_league', sync_buffer_leagues)
+                            sync_buffer_leagues = []
+                        if sync_buffer_standings:
+                            await sync_manager.batch_upsert('standings', sync_buffer_standings)
+                            sync_buffer_standings = []
+
+                print(f"   [+] Enriched {len(enriched_batch)} matches")
+                print(f"   [+] Teams: {len(teams_added)}, Leagues: {len(leagues_added)}")
+
+        finally:
+            # --- FINAL PROLOGUE SYNC (Chapter 0 Closure) ---
             if not dry_run:
-                # Save enriched data
-                for match in enriched_batch:
-                    # Update schedule
-                    save_schedule_entry(match)
-                    sync_buffer_schedules.append(match)
-
-                    # Build rl_id for team -> league mapping
-                    rl_id = match.get('rl_id', '')
-                    region = match.get('region', '')
-                    league = match.get('league', '')
-                    if not rl_id and region and league:
-                        rl_id = f"{region}_{league}".replace(' ', '_').replace('-', '_').upper()
-
-                    # Upsert home team with ALL columns
-                    if match.get('home_team_id'):
-                        home_team_data = {
-                            'team_id': match['home_team_id'],
-                            'team_name': match.get('home_team_name', match.get('home_team', 'Unknown')),
-                            'rl_ids': rl_id,
-                            'team_crest': match.get('home_team_crest', ''),
-                            'team_url': match.get('home_team_url', '')
-                        }
-                        save_team_entry(home_team_data)
-                        teams_added.add(match['home_team_id'])
-                        sync_buffer_teams.append(home_team_data)
-
-                    # Upsert away team with ALL columns
-                    if match.get('away_team_id'):
-                        away_team_data = {
-                            'team_id': match['away_team_id'],
-                            'team_name': match.get('away_team_name', match.get('away_team', 'Unknown')),
-                            'rl_ids': rl_id,
-                            'team_crest': match.get('away_team_crest', ''),
-                            'team_url': match.get('away_team_url', '')
-                        }
-                        save_team_entry(away_team_data)
-                        teams_added.add(match['away_team_id'])
-                        sync_buffer_teams.append(away_team_data)
-
-                    # Upsert region_league with ALL columns
-                    if rl_id:
-                        league_data = {
-                            'rl_id': rl_id,
-                            'region': region,
-                            'region_flag': match.get('region_flag', ''),
-                            'region_url': match.get('region_url', ''),
-                            'league': league,
-                            'league_url': match.get('league_url', ''),
-                            'league_crest': ''  # Not available on match page
-                        }
-                        save_region_league_entry(league_data)
-                        leagues_added.add(rl_id)
-                        sync_buffer_leagues.append(league_data)
-
-                    # --- Save standings if extracted ---
-                    standings_result = match.pop('_standings_data', None)
-                    if standings_result:
-                        s_data = standings_result.get('standings', [])
-                        s_league = standings_result.get('region_league', 'Unknown')
-                        s_url = standings_result.get('league_url', '')
-                        if s_league == 'Unknown' and match.get('region_league'):
-                            s_league = match['region_league']
-                        if s_data and s_league != 'Unknown':
-                            for row in s_data:
-                                row['url'] = s_url or match.get('league_url', '')
-                            save_standings(s_data, s_league)
-                            standings_saved += len(s_data)
-                            sync_buffer_standings.extend(s_data)
-
-                    # --- Backfill prediction if requested ---
-                    if backfill_predictions and match.get('fixture_id'):
-                        region_league = match.get('region_league', '')
-                        updates = {}
-                        if region_league and region_league != 'Unknown':
-                            updates['region_league'] = region_league
-                        if match.get('home_team_crest'):
-                            updates['home_crest_url'] = match['home_team_crest']
-                        if match.get('away_team_crest'):
-                            updates['away_crest_url'] = match['away_team_crest']
-                        if match.get('match_link'):
-                            updates['match_link'] = match['match_link']
-                        if updates:
-                            was_updated = backfill_prediction_entry(match['fixture_id'], updates)
-                            if was_updated:
-                                predictions_backfilled += 1
-                                # We should sync updated predictions too.
-                                # But backfill_prediction_entry doesn't return the full row.
-                                # This is complex. For now, rely on sync-on-startup or nightly sync.
-
-                    enriched_count += 1
+                print(f"\n   [PROLOGUE] Initiating Final Global Sync...")
+                # Ensure all buffers are flushed first (redundant but safe)
+                if sync_buffer_schedules: await sync_manager.batch_upsert('schedules', sync_buffer_schedules)
+                if sync_buffer_teams: await sync_manager.batch_upsert('teams', sync_buffer_teams)
+                if sync_buffer_leagues: await sync_manager.batch_upsert('region_league', sync_buffer_leagues)
+                if sync_buffer_standings: await sync_manager.batch_upsert('standings', sync_buffer_standings)
                 
-                # --- PERIODIC SYNC (Every 12 batches) ---
-                if batch_num % 12 == 0:
-                    print(f"   [SYNC] Upserting buffered data to Supabase...")
-                    if sync_buffer_schedules:
-                        await sync_manager.batch_upsert('schedules', sync_buffer_schedules)
-                        sync_buffer_schedules = []
-                    if sync_buffer_teams:
-                        await sync_manager.batch_upsert('teams', sync_buffer_teams)
-                        sync_buffer_teams = []
-                    if sync_buffer_leagues:
-                        await sync_manager.batch_upsert('region_league', sync_buffer_leagues)
-                        sync_buffer_leagues = []
-                    if sync_buffer_standings:
-                        await sync_manager.batch_upsert('standings', sync_buffer_standings)
-                        sync_buffer_standings = []
-
-            print(f"   [+] Enriched {len(enriched_batch)} matches")
-            print(f"   [+] Teams: {len(teams_added)}, Leagues: {len(leagues_added)}")
-
-        # --- FINAL SYNC FLUSH ---
-        print(f"   [SYNC] Flushing remaining buffered data to Supabase...")
-        if sync_buffer_schedules:
-            await sync_manager.batch_upsert('schedules', sync_buffer_schedules)
-        if sync_buffer_teams:
-            await sync_manager.batch_upsert('teams', sync_buffer_teams)
-        if sync_buffer_leagues:
-            await sync_manager.batch_upsert('region_league', sync_buffer_leagues)
-        if sync_buffer_standings:
-            await sync_manager.batch_upsert('standings', sync_buffer_standings)
-
-        if extract_standings:
-            print(f"   [+] Standings rows saved: {standings_saved}")
-        if backfill_predictions:
-            print(f"   [+] Predictions backfilled: {predictions_backfilled}")
-        
-        # --- FINAL SYNC ---
-        if not dry_run:
-            print(f"   [SYNC] Upserting remaining data to Supabase...")
-            if sync_buffer_schedules:
-                await sync_manager.batch_upsert('schedules', sync_buffer_schedules)
-            if sync_buffer_teams:
-                await sync_manager.batch_upsert('teams', sync_buffer_teams)
-            if sync_buffer_leagues:
-                await sync_manager.batch_upsert('region_league', sync_buffer_leagues)
-            if sync_buffer_standings:
-                await sync_manager.batch_upsert('standings', sync_buffer_standings)
+                # Perform global sync with verification and retries
+                await run_full_sync()
+                print(f"   [SUCCESS] Final global prologue sync complete.")
 
     # Summary
     print("\n" + "=" * 80)

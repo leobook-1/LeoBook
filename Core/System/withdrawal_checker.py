@@ -1,25 +1,26 @@
 # withdrawal_checker.py: Logic for managing automated withdrawal proposals.
-# Refactored for Clean Architecture (v2.7)
-# This script monitors balance and triggers Telegram notifications for wins.
+# Refactored for Clean Architecture (v2.8)
+# Withdrawal proposals are surfaced via LeoBook Web/App for approval.
 
 import asyncio
-from datetime import datetime as dt
+from datetime import datetime as dt, timedelta
 from pathlib import Path
 from Core.System.lifecycle import state, log_audit_state, log_state
 from Data.Access.db_helpers import log_audit_event
 
-# Local state for withdrawals (previously imported from telegram_bridge)
+# Local state for withdrawals
 pending_withdrawal = {
     "active": False,
     "amount": 0.0,
     "proposed_at": None,
+    "expiry": None,
     "approved": False
 }
 
 def calculate_proposed_amount(balance: float, latest_win: float) -> float:
     """v2.7 Calculation: Min(30% balance, 50% latest win)."""
     val = min(balance * 0.30, latest_win * 0.50)
-    # Ensure min 500 and floor of 5,000 remains
+    # Ensure floor of 5,000 remains in account
     if balance - val < 5000:
         val = balance - 5000
     
@@ -45,20 +46,56 @@ async def propose_withdrawal(amount: float):
         "active": True,
         "amount": amount,
         "proposed_at": dt.now(),
+        "expiry": dt.now() + timedelta(hours=2),
         "approved": False
     })
 
-    # Telegram Notification Disabled (v2.8)
-    print(f"   [Withdrawal] Proposal active: ₦{amount:.2f} (Waiting for Web/App approval)")
-    # Logic for web-based approval would go here (e.g. updating a DB flag)
+    print(f"   [Withdrawal] Proposal active: ₦{amount:.2f} (Awaiting LeoBook Web/App approval)")
+    # Persist proposal to Supabase via audit log for Web/App approval UI
+    log_audit_event(
+        "WITHDRAWAL_PROPOSAL",
+        f"Proposed: ₦{amount:.2f} | Balance: ₦{state.get('current_balance', 0):.2f}",
+        status="pending"
+    )
+
+async def check_withdrawal_approval() -> bool:
+    """
+    Check if a pending withdrawal has been approved via LeoBook Web/App.
+    Reads approval status from Supabase audit_log (flagged by Web/App).
+    """
+    if not pending_withdrawal["active"]:
+        return False
+
+    # Check expiration
+    if pending_withdrawal["expiry"] and dt.now() > pending_withdrawal["expiry"]:
+        print("   [Withdrawal] Proposal expired (Time-to-Live exceeded). Resetting.")
+        log_audit_event("WITHDRAWAL_EXPIRED", f"Expired proposal: ₦{pending_withdrawal['amount']}", status="reset")
+        pending_withdrawal.update({"active": False, "amount": 0.0, "expiry": None})
+        return False
+    
+    try:
+        from Data.Access.sync_manager import get_supabase_client
+        sb = get_supabase_client()
+        if sb:
+            result = sb.table("audit_log").select("status").eq(
+                "event_type", "WITHDRAWAL_APPROVAL"
+            ).order("created_at", desc=True).limit(1).execute()
+            
+            if result.data and result.data[0].get("status") == "approved":
+                pending_withdrawal["approved"] = True
+                print("   [Withdrawal] ✅ Approval received from LeoBook Web/App.")
+                return True
+    except Exception as e:
+        print(f"   [Withdrawal] Approval check failed: {e}")
+    
+    return False
 
 async def execute_withdrawal(amount: float):
-    """Executes the withdrawal using an isolated browser context (v2.7)."""
-    print(f"   [Execute] Starting Telegram-approved withdrawal for ₦{amount:.2f}...")
+    """Executes the withdrawal using an isolated browser context (v2.8)."""
+    print(f"   [Execute] Starting approved withdrawal for ₦{amount:.2f}...")
     from playwright.async_api import async_playwright
     
     async with async_playwright() as p:
-        # We need a browser context, preferably reusing persistent session
         user_data_dir = Path("Data/Auth/ChromeData_v3").absolute()
         try:
             context = await p.chromium.launch_persistent_context(
@@ -72,9 +109,11 @@ async def execute_withdrawal(amount: float):
             success = await check_and_perform_withdrawal(page, state["current_balance"], last_win_amount=amount*2)
             
             if success:
-                log_state("Withdrawal", f"Executed ₦{amount:,.2f}", "Automated/Web Approval")
+                log_state("Withdrawal", f"Executed ₦{amount:,.2f}", "Web/App Approval")
                 log_audit_event("WITHDRAWAL_EXECUTED", f"Executed: ₦{amount}", state["current_balance"], state["current_balance"]-amount, amount)
                 state["last_withdrawal_time"] = dt.now()
+                # Reset pending state
+                pending_withdrawal.update({"active": False, "amount": 0.0, "proposed_at": None, "expiry": None, "approved": False})
             else:
                 print("   [Execute Error] Withdrawal process failed.")
                 

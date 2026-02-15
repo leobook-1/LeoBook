@@ -24,7 +24,9 @@ SCHEDULES_CSV = os.path.join(DB_DIR, "schedules.csv")
 STANDINGS_CSV = os.path.join(DB_DIR, "standings.csv")
 TEAMS_CSV = os.path.join(DB_DIR, "teams.csv")
 REGION_LEAGUE_CSV = os.path.join(DB_DIR, "region_league.csv")
+ACCURACY_REPORTS_CSV = os.path.join(DB_DIR, "accuracy_reports.csv")
 FB_MATCHES_CSV = os.path.join(DB_DIR, "fb_matches.csv")
+MATCH_REGISTRY_CSV = FB_MATCHES_CSV  # Alias for URL resolution
 AUDIT_LOG_CSV = os.path.join(DB_DIR, "audit_log.csv")
 PROFILES_CSV = os.path.join(DB_DIR, "profiles.csv")
 CUSTOM_RULES_CSV = os.path.join(DB_DIR, "custom_rules.csv")
@@ -421,6 +423,7 @@ files_and_headers = {
     ],
     TEAMS_CSV: ['team_id', 'team_name', 'rl_ids', 'team_crest', 'team_url', 'last_updated'],
     REGION_LEAGUE_CSV: ['rl_id', 'region', 'region_flag', 'region_url', 'league', 'league_crest', 'league_url', 'date_updated', 'last_updated'],
+    ACCURACY_REPORTS_CSV: ['report_id', 'timestamp', 'volume', 'win_rate', 'return_pct', 'period', 'last_updated'],
     FB_MATCHES_CSV: [
         'site_match_id', 'date', 'time', 'home_team', 'away_team', 'league', 'url', 
         'last_extracted', 'fixture_id', 'matched', 'odds', 'booking_status', 'booking_details',
@@ -431,12 +434,12 @@ files_and_headers = {
     ],
     # User & Rule Engine Tables
     os.path.join(DB_DIR, "profiles.csv"): [
-        'id', 'email', 'username', 'full_name', 'avatar_url', 'tier', 'credits', 'created_at', 'updated_at'
+        'id', 'email', 'username', 'full_name', 'avatar_url', 'tier', 'credits', 'created_at', 'updated_at', 'last_updated'
     ],
     os.path.join(DB_DIR, "custom_rules.csv"): [
-        'id', 'user_id', 'name', 'description', 'is_active', 'logic', 'priority', 'created_at', 'updated_at'
+        'id', 'user_id', 'name', 'description', 'is_active', 'logic', 'priority', 'created_at', 'updated_at', 'last_updated'
     ],
     os.path.join(DB_DIR, "rule_executions.csv"): [
-        'id', 'rule_id', 'fixture_id', 'user_id', 'result', 'executed_at'
+        'id', 'rule_id', 'fixture_id', 'user_id', 'result', 'executed_at', 'last_updated'
     ]
 }

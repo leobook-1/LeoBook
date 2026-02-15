@@ -23,6 +23,7 @@ async def process_match_task(match_data: dict, browser: Browser):
             "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/91.0.4472.124 Mobile Safari/537.36"
         ),
+        viewport={'width': 450, 'height': 900},
         timezone_id="Africa/Lagos"
     )
     page = await context.new_page()
@@ -30,7 +31,7 @@ async def process_match_task(match_data: dict, browser: Browser):
     match_label = f"{match_data.get('home_team', 'unknown')}_vs_{match_data.get('away_team', 'unknown')}"
 
     try:
-        print(f"    [Batch Start] {match_data['home_team']} vs {match_data['away_team']}: {match_data['date']} - {match_data['time']}")
+        print(f"    [Batch Start] {match_data['home_team']} vs {match_data['away_team']}")
 
         full_match_url = f"{match_data['match_link']}"
         await page.goto(full_match_url, wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT)
@@ -38,31 +39,28 @@ async def process_match_task(match_data: dict, browser: Browser):
 
         await fs_universal_popup_dismissal(page, "fs_match_page")
         await page.wait_for_load_state("domcontentloaded", timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-        await fs_universal_popup_dismissal(page, "fs_match_page")
-
-        # --- H2H Tab & Expansion ---
+        
+        # --- H2H Tab & Expansion (Mobile Optimized) ---
         h2h_data = {}
         if await activate_h2h_tab(page):
             try:
-                show_more_selector = "button:has-text('Show more matches'), a:has-text('Show more matches')"
-                try:
-                    await page.wait_for_selector(show_more_selector, timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-                    show_more_buttons = page.locator(show_more_selector).first 
-                    if await show_more_buttons.count() > 0:
-                        print("    [H2H Expansion] Expanding available match history...")
+                # Sections: Home Last 5/10, Away Last 5/10, Mutual H2H
+                show_more_selector = ".h2h__section .h2h__showMore"
+                
+                print("    [H2H Expansion] Expanding sections for deep analysis...")
+                for _ in range(2): # Click twice for each to get ~15 matches
+                    buttons = page.locator(show_more_selector)
+                    btn_count = await buttons.count()
+                    for j in range(btn_count):
                         try:
-                            await show_more_buttons.click(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
-                            await asyncio.sleep(2.0)
-                            second_button = page.locator(show_more_selector).nth(1)
-                            if await second_button.count() > 0:
-                                await second_button.click(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT)
+                            btn = buttons.nth(j)
+                            if await btn.is_visible():
+                                await btn.click(timeout=5000)
                                 await asyncio.sleep(1.0)
-                        except Exception:
-                            print("    [H2H Expansion] Some expansion buttons failed, but continuing...")
-                except Exception:
-                    print("    [H2H Expansion] No expansion buttons found or failed to load.")
-
-                await asyncio.sleep(3.0)
+                        except:
+                            continue
+                
+                await asyncio.sleep(1.5)
                 h2h_data = await retry_extraction(extract_h2h_data, page, match_data['home_team'], match_data['away_team'], "fs_h2h_tab")
 
                 h2h_count = len(h2h_data.get("home_last_10_matches", [])) + len(h2h_data.get("away_last_10_matches", [])) + len(h2h_data.get("head_to_head", []))
@@ -172,21 +170,35 @@ async def process_match_task(match_data: dict, browser: Browser):
             print(f"      [Warning] Failed to extract expanded metadata for {match_label}: {e}")
 
         # --- Process Data & Predict ---
-        h2h_league = h2h_data.get("region_league", "Unknown")
-        final_league = standings_result.get("region_league", "Unknown") if 'standings_result' in locals() else h2h_league
-        
-        # ... existing logic ...
-        # (Note: I will use the extracted rl_id where possible)
-
         analysis_input = {"h2h_data": h2h_data, "standings": standings_data}
         prediction = RuleEngine.analyze(analysis_input)
 
-        if prediction.get("type", "SKIP") != "SKIP":
+        total_xg = prediction.get("total_xg", 0.0)
+        p_type = prediction.get("type", "SKIP")
+
+        # Rule Engine Logic Gate: Prioritize Over markets if Avg Goals > 1.8
+        # We also verify if a prediction was skipped despite high xG
+        if total_xg > 1.8 and p_type == "SKIP":
+            print(f"      [xG Signal] High Avg Goals ({total_xg}) detected. Categorizing as OVER 1.5 fallback.")
+            prediction.update({
+                "type": "OVER 1.5",
+                "market_prediction": "OVER 1.5",
+                "confidence": "Medium",
+                "reason": [f"High Avg Goals ({total_xg}) logic gate met"]
+            })
+            p_type = "OVER 1.5"
+
+        if p_type != "SKIP":
+            # Verification: If Avg Goals is too low, downgrade confidence
+            if total_xg < 1.4 and prediction.get("confidence") == "High":
+                prediction["confidence"] = "Medium"
+                prediction["reason"].append(f"Confidence adjusted for low Avg Goals ({total_xg})")
+
             save_prediction(match_data, prediction)
-            print(f"            [OK Signal] {match_label}")
+            print(f"            [OK Signal] {match_label} (Type: {p_type}, xG: {total_xg})")
             return True
         else:
-            print(f"      [NO Signal] {match_label}")
+            print(f"      [NO Signal] {match_label} (xG: {total_xg})")
             return False
 
     except Exception as e:

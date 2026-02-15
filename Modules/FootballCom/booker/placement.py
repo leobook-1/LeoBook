@@ -1,5 +1,5 @@
 # placement.py: Final bet submission and stakeholder management.
-# Refactored for Clean Architecture (v2.7)
+# Refactored for Clean Architecture (v2.8)
 # This script injects codes, calculates Kelly stakes, and confirms placement.
 
 """
@@ -19,6 +19,14 @@ from .ui import wait_for_condition
 from .mapping import find_market_and_outcome
 from .slip import get_bet_slip_count, force_clear_slip
 from Data.Access.db_helpers import log_audit_event
+
+# Confidence → probability mapping (matches data_validator.py)
+CONFIDENCE_TO_PROB = {
+    "Very High": 0.80,
+    "High": 0.65,
+    "Medium": 0.50,
+    "Low": 0.35,
+}
 
 async def ensure_bet_insights_collapsed(page: Page):
     """Ensure the bet insights widget is collapsed."""
@@ -226,19 +234,30 @@ async def place_multi_bet_from_codes(page: Page, harvested_matches: List[Dict], 
             print("    [Execute Error] Slip is empty after injection.")
             return False
 
-        # 4. Calculate Stake (Kelly v2.7)
-        # Use real extracted odds from matched site matches
+        # 4. Calculate Stake (Kelly v2.8 — Standard Aggregation)
+        # P_total = Product(p_i) for independent events
+        
         total_odds = 1.0
+        total_prob = 1.0
+        
         for m in final_codes:
             try:
-                # Use extracted odds, fallback to 1.5 if missing/invalid
                 m_odds = float(m.get('odds', 1.5))
                 total_odds *= m_odds
             except:
                 total_odds *= 1.5
+            
+            # Dynamic p from confidence
+            conf = m.get('confidence', 'Medium')
+            p = CONFIDENCE_TO_PROB.get(conf, 0.50)
+            total_prob *= p
         
-        print(f"    [Execute] Total Accumulator Odds: {total_odds:.2f}")
-        final_stake = calculate_kelly_stake(current_balance, total_odds)
+        # Safety clamp for very long accumulators
+        if total_prob < 0.01: 
+            total_prob = 0.01
+            
+        print(f"    [Execute] Total Odds: {total_odds:.2f} | Total Win Prob: {total_prob:.4f}")
+        final_stake = calculate_kelly_stake(current_balance, total_odds, probability=total_prob)
         print(f"    [Execute] Final Stake: ₦{final_stake} (Balance: ₦{current_balance:.2f})")
 
         # 5. Place

@@ -6,6 +6,10 @@ import 'package:leobookapp/presentation/screens/home_screen.dart';
 import 'package:leobookapp/presentation/screens/account_screen.dart';
 import 'package:leobookapp/presentation/screens/rule_engine/backtest_dashboard.dart';
 import 'package:leobookapp/presentation/screens/top_predictions_screen.dart';
+import 'package:leobookapp/presentation/widgets/responsive/navigation_sidebar.dart';
+import 'package:leobookapp/presentation/widgets/responsive/desktop_header.dart';
+
+import '../widgets/responsive/global_stats_footer.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -28,79 +32,115 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      extendBody: false,
-      body: IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: Container(
-        color: Colors.transparent,
-        margin: const EdgeInsets.fromLTRB(58, 0, 58, 40),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(40),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-            child: Container(
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.white.withValues(alpha: 0.75),
-                borderRadius: BorderRadius.circular(40),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.12)
-                      : Colors.black.withValues(alpha: 0.06),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth > 1024;
+
+        if (isDesktop) {
+          return Scaffold(
+            body: Row(
+              children: [
+                NavigationSideBar(
+                  currentIndex: _currentIndex,
+                  onIndexChanged: (index) {
+                    setState(() => _currentIndex = index);
+                    HapticFeedback.lightImpact();
+                  },
                 ),
-              ),
-              child: BottomNavigationBar(
-                currentIndex: _currentIndex,
-                onTap: (index) {
-                  setState(() => _currentIndex = index);
-                  HapticFeedback.lightImpact();
-                },
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                type: BottomNavigationBarType.fixed,
-                selectedItemColor: AppColors.primary,
-                unselectedItemColor: isDark
-                    ? Colors.white38
-                    : AppColors.textGrey,
-                showSelectedLabels: true,
-                showUnselectedLabels: false,
-                selectedLabelStyle: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
+                Expanded(
+                  child: Column(
+                    children: [
+                      const DesktopHeader(),
+                      Expanded(
+                        child: IndexedStack(
+                          index: _currentIndex,
+                          children: _screens,
+                        ),
+                      ),
+                      const GlobalStatsFooter(),
+                    ],
+                  ),
                 ),
-                items: [
-                  _buildNavItem(
-                    Icons.home_rounded,
-                    Icons.home_outlined,
-                    0,
-                    "HOME",
+              ],
+            ),
+          );
+        }
+
+        return Scaffold(
+          extendBody: false,
+          body: IndexedStack(index: _currentIndex, children: _screens),
+          bottomNavigationBar: Container(
+            color: Colors.transparent,
+            margin: const EdgeInsets.fromLTRB(58, 0, 58, 40),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(40),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppColors.cardDark.withValues(alpha: 0.95)
+                        : Colors.white.withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(40),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : Colors.black.withValues(alpha: 0.05),
+                    ),
                   ),
-                  _buildNavItem(
-                    Icons.science_rounded,
-                    Icons.science_outlined,
-                    1,
-                    "RULES",
+                  child: BottomNavigationBar(
+                    currentIndex: _currentIndex,
+                    onTap: (index) {
+                      setState(() => _currentIndex = index);
+                      HapticFeedback.lightImpact();
+                    },
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    type: BottomNavigationBarType.fixed,
+                    selectedItemColor: AppColors.primary,
+                    unselectedItemColor: isDark
+                        ? Colors.white38
+                        : AppColors.textGrey,
+                    showSelectedLabels: true,
+                    showUnselectedLabels: false,
+                    selectedLabelStyle: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                    items: [
+                      _buildNavItem(
+                        Icons.home_rounded,
+                        Icons.home_outlined,
+                        0,
+                        "HOME",
+                      ),
+                      _buildNavItem(
+                        Icons.science_rounded,
+                        Icons.science_outlined,
+                        1,
+                        "RULES",
+                      ),
+                      _buildNavItem(
+                        Icons.emoji_events_rounded,
+                        Icons.emoji_events_outlined,
+                        2,
+                        "TOP",
+                      ),
+                      _buildNavItem(
+                        Icons.person_rounded,
+                        Icons.person_outline_rounded,
+                        3,
+                        "PROFILE",
+                      ),
+                    ],
                   ),
-                  _buildNavItem(
-                    Icons.emoji_events_rounded,
-                    Icons.emoji_events_outlined,
-                    2,
-                    "TOP",
-                  ),
-                  _buildNavItem(
-                    Icons.person_rounded,
-                    Icons.person_outline_rounded,
-                    3,
-                    "PROFILE",
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

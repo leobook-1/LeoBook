@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'dart:ui';
 import 'package:leobookapp/core/constants/app_colors.dart';
 import 'package:leobookapp/data/models/recommendation_model.dart';
 import 'package:leobookapp/data/models/match_model.dart';
@@ -46,8 +45,31 @@ class TopPredictionsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 1024;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
+      appBar: isDesktop
+          ? null
+          : AppBar(
+              backgroundColor: AppColors.backgroundDark.withValues(alpha: 0.8),
+              elevation: 0,
+              title: const Text(
+                "Top Predictions",
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  fontSize: 18,
+                ),
+              ),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(80),
+                child: _buildDateSelector(
+                  context,
+                  BlocProvider.of<HomeCubit>(context).state,
+                ),
+              ),
+            ),
       body: BlocBuilder<HomeCubit, HomeState>(
         builder: (context, state) {
           if (state is! HomeLoaded) {
@@ -56,82 +78,37 @@ class TopPredictionsScreen extends StatelessWidget {
 
           return CustomScrollView(
             slivers: [
-              // Sticky Header with Blur
-              SliverAppBar(
-                pinned: true,
-                floating: true,
-                backgroundColor: AppColors.backgroundDark.withValues(
-                  alpha: 0.8,
-                ),
-                elevation: 0,
-                leading: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                flexibleSpace: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(color: Colors.transparent),
-                  ),
-                ),
-                title: const Text(
-                  "Top Predictions",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                    fontSize: 18,
-                  ),
-                ),
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.tune, color: Colors.white70),
-                    onPressed: () {},
-                  ),
-                ],
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(80),
-                  child: Container(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.05),
+              if (isDesktop)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "TOP PREDICTIONS",
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: -1,
+                          ),
                         ),
-                      ),
-                    ),
-                    child: SizedBox(
-                      height: 70,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: 7,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemBuilder: (context, index) {
-                          final now = DateTime.now();
-                          final dayOffset = index - 3;
-                          final date = DateTime(
-                            now.year,
-                            now.month,
-                            now.day,
-                          ).add(Duration(days: dayOffset));
-
-                          final isSelected =
-                              date.year == state.selectedDate.year &&
-                              date.month == state.selectedDate.month &&
-                              date.day == state.selectedDate.day;
-
-                          return _buildDateItem(context, date, isSelected);
-                        },
-                      ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Expert-curated match analyses with ultra-high accuracy targets.",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textGrey,
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        _buildDateSelector(context, state),
+                      ],
                     ),
                   ),
                 ),
-              ),
-
-              // Recommendations List
+              // Recommendations List/Grid
               state.filteredRecommendations.isEmpty
                   ? const SliverFillRemaining(
                       child: Center(
@@ -142,24 +119,98 @@ class TopPredictionsScreen extends StatelessWidget {
                       ),
                     )
                   : SliverPadding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate((context, index) {
-                          final rec = state.filteredRecommendations[index];
-                          return GestureDetector(
-                            onTap: () => _navigateToMatch(
-                              context,
-                              rec,
-                              state.allMatches,
-                            ),
-                            child: RecommendationCard(recommendation: rec),
-                          );
-                        }, childCount: state.filteredRecommendations.length),
+                      padding: EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: isDesktop ? 32 : 0,
                       ),
+                      sliver: isDesktop
+                          ? SliverGrid(
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    crossAxisSpacing: 24,
+                                    mainAxisSpacing: 24,
+                                    childAspectRatio: 1.4,
+                                  ),
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                                  final rec =
+                                      state.filteredRecommendations[index];
+                                  return GestureDetector(
+                                    onTap: () => _navigateToMatch(
+                                      context,
+                                      rec,
+                                      state.allMatches,
+                                    ),
+                                    child: RecommendationCard(
+                                      recommendation: rec,
+                                    ),
+                                  );
+                                },
+                                childCount:
+                                    state.filteredRecommendations.length,
+                              ),
+                            )
+                          : SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                                  final rec =
+                                      state.filteredRecommendations[index];
+                                  return GestureDetector(
+                                    onTap: () => _navigateToMatch(
+                                      context,
+                                      rec,
+                                      state.allMatches,
+                                    ),
+                                    child: RecommendationCard(
+                                      recommendation: rec,
+                                    ),
+                                  );
+                                },
+                                childCount:
+                                    state.filteredRecommendations.length,
+                              ),
+                            ),
                     ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildDateSelector(BuildContext context, HomeState state) {
+    if (state is! HomeLoaded) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+        ),
+      ),
+      child: SizedBox(
+        height: 70,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: 7,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          itemBuilder: (context, index) {
+            final now = DateTime.now();
+            final dayOffset = index - 3;
+            final date = DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(Duration(days: dayOffset));
+
+            final isSelected =
+                date.year == state.selectedDate.year &&
+                date.month == state.selectedDate.month &&
+                date.day == state.selectedDate.day;
+
+            return _buildDateItem(context, date, isSelected);
+          },
+        ),
       ),
     );
   }

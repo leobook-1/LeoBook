@@ -12,3 +12,4 @@ nest-asyncio
 
 # Supabase sync dependencies
 supabase>=2.0.0
+tqdm

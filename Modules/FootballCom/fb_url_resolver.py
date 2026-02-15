@@ -1,83 +1,93 @@
-# fb_url_resolver.py: Match discovery and URL mapping for Football.com.
-# Refactored for Clean Architecture (v2.7)
-# This script executes search/navigation to find specific match pages.
-
 from playwright.async_api import Page
+from fuzzywuzzy import fuzz
+import asyncio
+from typing import List, Dict
+
 from Data.Access.db_helpers import (
-    load_site_matches, save_site_matches, update_site_match_status
+    load_site_matches, save_site_matches, update_site_match_status, 
+    get_all_schedules, MATCH_REGISTRY_CSV
 )
+from Data.Access.sync_manager import run_full_sync
 from .navigator import navigate_to_schedule, select_target_date
 from .extractor import extract_league_matches
-from .matcher import match_predictions_with_site
+from .match_resolver import GrokMatcher
 
-async def resolve_urls(page: Page, target_date: str, day_preds: list) -> dict:
+# Initialize Matcher (Singleton-ish)
+matcher = GrokMatcher()
+
+async def resolve_urls(page: Page, target_date: str) -> dict:
     """
-    Resolves URLs for predictions by checking cache, then scraping ONLY if cache is empty for the date.
-    Returns: mapped_urls {fixture_id: url}
+    Resolves URLs for predictions by matching Flashscore fixtures with Football.com matches.
+    Uses fuzzy matching and progressive synchronization (every 10 mappings).
     """
-    cached_site_matches = load_site_matches(target_date)
-    matched_urls = {}
+    print(f"\n    [URL Resolver] Resolving Football.com mappings for {target_date}...")
     
-    # 1. Direct ID check (Already matched in previous runs)
-    unmatched_predictions = []
-    for pred in day_preds:
-        fid = str(pred.get('fixture_id'))
-        cached_match = next((m for m in cached_site_matches if m.get('fixture_id') == fid), None)
-        if cached_match and cached_match.get('url'):
-            if cached_match.get('booking_status') != 'booked':
-                matched_urls[fid] = cached_match.get('url')
-        else:
-            unmatched_predictions.append(pred)
+    # 1. Load Flashscore schedules for the target date
+    all_fs_schedules = get_all_schedules()
+    day_fs_matches = [m for m in all_fs_schedules if m.get('date') == target_date]
+    
+    if not day_fs_matches:
+        print(f"    [URL Resolver] No Flashscore schedules found for {target_date}. Skipping.")
+        return {}
 
-    if not unmatched_predictions:
-        return matched_urls
-
-    # 2. If we have unmatched predictions but the cache is NOT empty, try AI matching first
-    if cached_site_matches:
-        print(f"  [Registry] Found {len(cached_site_matches)} cached matches for {target_date}. Attempting AI match...")
-        new_mappings = await match_predictions_with_site(unmatched_predictions, cached_site_matches)
-        
-        still_unmatched = []
-        for pred in unmatched_predictions:
-            fid = str(pred.get('fixture_id'))
-            if fid in new_mappings:
-                url = new_mappings[fid]
-                matched_urls[fid] = url
-                site_match = next((m for m in cached_site_matches if m.get('url') == url), None)
-                if site_match:
-                    fs_fixture_name = f"{pred.get('home_team')} vs {pred.get('away_team')}"
-                    update_site_match_status(site_match['site_match_id'], 'pending', fixture_id=fid, matched=fs_fixture_name)
-            else:
-                still_unmatched.append(pred)
-        unmatched_predictions = still_unmatched
-
-    # 3. Only Crawl if we still have unmatched AND the cache was completely empty for this date
-    if unmatched_predictions and not cached_site_matches:
-        print(f"  [Registry] Cache empty for {target_date}. Starting full crawl...")
+    # 2. Extract or Load Football.com matches
+    cached_site_matches = load_site_matches(target_date)
+    if not cached_site_matches:
+        print(f"    [URL Resolver] Cache empty. Navigating to Football.com schedule...")
         await navigate_to_schedule(page)
         if await select_target_date(page, target_date):
-            site_matches = await extract_league_matches(page, target_date)
-            if site_matches:
-                save_site_matches(site_matches)
-                # Refresh cache from disk
-                new_cached_matches = load_site_matches(target_date)
-                new_mappings = await match_predictions_with_site(unmatched_predictions, new_cached_matches)
-                for fid, url in new_mappings.items():
-                    matched_urls[fid] = url
-                    site_match = next((m for m in new_cached_matches if m.get('url') == url), None)
-                    if site_match:
-                        # Find the prediction for this fixture_id to get its FS name
-                        pred = next((p for p in unmatched_predictions if str(p.get('fixture_id')) == fid), {})
-                        fs_fixture_name = f"{pred.get('home_team')} vs {pred.get('away_team')}"
-                        update_site_match_status(site_match['site_match_id'], 'pending', fixture_id=fid, matched=fs_fixture_name)
+            cached_site_matches = await extract_league_matches(page, target_date)
+            if cached_site_matches:
+                save_site_matches(cached_site_matches)
+    
+    if not cached_site_matches:
+        print(f"    [URL Resolver] Failed to retrieve Football.com matches for {target_date}.")
+        return {}
 
-    return matched_urls
+    # 3. Fuzzy Matching & Progressive Sync
+    resolved_count = 0
+    mappings = {}
+    
+    for fs_match in day_fs_matches:
+        fs_home = fs_match.get('home_team', '').lower()
+        fs_away = fs_match.get('away_team', '').lower()
+        fixture_id = fs_match.get('fixture_id')
+        
+        # Skip if already matched in cache
+        already_matched = next((m for m in cached_site_matches if m.get('fixture_id') == fixture_id), None)
+        if already_matched:
+            mappings[fixture_id] = already_matched.get('url')
+            continue
+
+        # Use GrokMatcher (LLM > Fuzzy > None)
+        best_match, highest_score = await matcher.resolve(f"{fs_home} vs {fs_away}", cached_site_matches)
+        
+        if best_match:
+            print(f"    [Matched] {fs_home} vs {fs_away}  ==>  {best_match['home_team']} vs {best_match['away_team']} ({highest_score:.1f}%)")
+            mappings[fixture_id] = best_match['url']
+            
+            # Update registry with the fixture_id
+            update_site_match_status(
+                best_match['site_match_id'], 
+                status='pending', 
+                fixture_id=fixture_id, 
+                matched=f"{fs_match['home_team']} vs {fs_match['away_team']}"
+            )
+            
+            resolved_count += 1
+            if resolved_count % 10 == 0:
+                print(f"\n    [Progressive Sync] Reached {resolved_count} mappings. Triggering cloud sync...")
+                await run_full_sync()
+    
+    # Final sync if any mappings occurred
+    if resolved_count > 0 and resolved_count % 10 != 0:
+        await run_full_sync()
+
+    print(f"    [URL Resolver] Completed. Resolved {resolved_count} new mappings.")
+    return mappings
 
 async def get_harvested_matches_for_date(target_date: str) -> list:
-    """
-    Retrieves matches for the date that have valid booking codes (harvested in Phase 2a).
-    Used for Phase 2b multi-bet placement.
-    """
+    """Retrieves matches for the date that have valid booking codes."""
     site_matches = load_site_matches(target_date)
     harvested = [m for m in site_matches if m.get('booking_code') and m.get('booking_code') != 'N/A']
     print(f"  [Registry] Found {len(harvested)} harvested codes for {target_date}.")

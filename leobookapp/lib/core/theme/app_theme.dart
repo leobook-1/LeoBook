@@ -11,42 +11,42 @@ class AppTheme {
       primaryColor: AppColors.primary,
       cardColor: AppColors.glassDark,
 
-      textTheme: GoogleFonts.interTextTheme().copyWith(
-        displayLarge: GoogleFonts.inter(
+      textTheme: GoogleFonts.lexendTextTheme().copyWith(
+        displayLarge: GoogleFonts.lexend(
           fontSize: 32,
           fontWeight: FontWeight.w700,
           color: Colors.white,
           letterSpacing: -1.5,
         ),
-        titleLarge: GoogleFonts.inter(
+        titleLarge: GoogleFonts.lexend(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: Colors.white,
           letterSpacing: -0.5,
         ),
-        titleMedium: GoogleFonts.inter(
+        titleMedium: GoogleFonts.lexend(
           fontSize: 16,
           fontWeight: FontWeight.w600,
           color: AppColors.textLight,
         ),
-        bodyLarge: GoogleFonts.inter(
+        bodyLarge: GoogleFonts.lexend(
           fontSize: 16,
           fontWeight: FontWeight.w400,
           color: AppColors.textLight,
           height: 1.5,
         ),
-        bodyMedium: GoogleFonts.inter(
+        bodyMedium: GoogleFonts.lexend(
           fontSize: 14,
           fontWeight: FontWeight.w400,
           color: AppColors.textGrey,
           height: 1.6,
         ),
-        bodySmall: GoogleFonts.inter(
+        bodySmall: GoogleFonts.lexend(
           fontSize: 12,
           fontWeight: FontWeight.w400,
           color: AppColors.textGrey,
         ),
-        labelLarge: GoogleFonts.inter(
+        labelLarge: GoogleFonts.lexend(
           fontSize: 12,
           fontWeight: FontWeight.w700,
           color: AppColors.textGrey,
@@ -56,11 +56,11 @@ class AppTheme {
 
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primary,
-        surface: AppColors.backgroundDark,
+        surface: AppColors.surfaceDark,
         onSurface: AppColors.textLight,
         error: AppColors.liveRed,
         secondary: AppColors.successGreen,
-        surfaceContainerHighest: AppColors.glassDark,
+        surfaceContainerHighest: AppColors.surfaceDark,
       ),
 
       // Glass-aware AppBar
@@ -69,7 +69,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.lexend(
           color: Colors.white,
           fontSize: 20,
           fontWeight: FontWeight.w700,
@@ -82,8 +82,23 @@ class AppTheme {
         color: AppColors.glassDark,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.glassBorderDark),
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+        ),
+      ),
+
+      // Input Decoration
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.desktopSearchFill,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        hintStyle: const TextStyle(
+          color: Colors.white24,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       ),
 
@@ -97,7 +112,7 @@ class AppTheme {
       // Animated snackbar
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.cardDark,
-        contentTextStyle: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+        contentTextStyle: GoogleFonts.lexend(color: Colors.white, fontSize: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
       ),
@@ -111,9 +126,9 @@ class AppTheme {
       ),
 
       // Divider
-      dividerColor: AppColors.glassBorderDark,
+      dividerColor: Colors.white10,
       dividerTheme: const DividerThemeData(
-        color: AppColors.glassBorderDark,
+        color: Colors.white10,
         thickness: 0.5,
       ),
     );

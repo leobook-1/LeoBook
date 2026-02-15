@@ -2,26 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:leobookapp/logic/cubit/home_cubit.dart';
 import 'package:leobookapp/core/constants/app_colors.dart';
+import 'package:leobookapp/core/utils/match_sorter.dart';
 import '../widgets/match_card.dart';
 import '../widgets/header_section.dart';
 import '../widgets/featured_carousel.dart';
 import '../widgets/news_feed.dart';
 import '../widgets/footnote_section.dart';
-import 'all_predictions_screen.dart';
+import '../widgets/responsive/desktop_home_content.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDesktop = MediaQuery.of(context).size.width > 1024;
+
     return Scaffold(
       body: SafeArea(
         child: BlocBuilder<HomeCubit, HomeState>(
           builder: (context, state) {
-            final isDark = Theme.of(context).brightness == Brightness.dark;
             if (state is HomeLoading) {
-              return Center(child: CircularProgressIndicator());
+              return const Center(child: CircularProgressIndicator());
             } else if (state is HomeLoaded) {
+              if (isDesktop) {
+                return DesktopHomeContent(state: state);
+              }
+
               return RefreshIndicator(
                 onRefresh: () async {
                   context.read<HomeCubit>().loadDashboard();
@@ -49,102 +76,55 @@ class HomeScreen extends StatelessWidget {
                     const SliverToBoxAdapter(child: SizedBox(height: 16)),
                     SliverToBoxAdapter(child: NewsFeed(news: state.news)),
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
-                      sliver: SliverToBoxAdapter(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.list_alt,
-                                  color: AppColors.primary,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  "ALL PREDICTIONS",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w900,
-                                    color: isDark
-                                        ? Colors.white
-                                        : AppColors.textDark,
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                              ],
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      sliver: SliverPersistentHeader(
+                        pinned: true,
+                        delegate: _StickyTabBarDelegate(
+                          TabBar(
+                            controller: _tabController,
+                            indicatorColor: AppColors.primary,
+                            indicatorWeight: 3,
+                            labelColor: AppColors.primary,
+                            unselectedLabelColor: isDark
+                                ? Colors.white60
+                                : AppColors.textGrey,
+                            labelStyle: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.0,
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          return MatchCard(match: state.filteredMatches[index]);
-                        },
-                        childCount: state.isAllMatchesExpanded
-                            ? state.filteredMatches.length
-                            : (state.filteredMatches.length > 12
-                                  ? 12
-                                  : state.filteredMatches.length),
-                      ),
-                    ),
-                    if (!state.isAllMatchesExpanded &&
-                        state.filteredMatches.length > 12)
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 16.0,
-                        ),
-                        sliver: SliverToBoxAdapter(
-                          child: InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => AllPredictionsScreen(
-                                    date: state.selectedDate,
-                                    sport: state.selectedSport,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Container(
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.3,
-                                  ),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    "LOAD MORE (${state.filteredMatches.length - 12} MATCHES)",
-                                    style: TextStyle(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.1,
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Icon(
-                                    Icons.keyboard_arrow_down,
-                                    color: AppColors.primary,
-                                  ),
-                                ],
-                              ),
-                            ),
+                            tabs: const [
+                              Tab(text: "ALL PREDICTIONS"),
+                              Tab(text: "FINISHED"),
+                              Tab(text: "SCHEDULED"),
+                            ],
                           ),
+                          isDark,
                         ),
                       ),
-                    SliverToBoxAdapter(child: FootnoteSection()),
+                    ),
+                    SliverFillRemaining(
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildMatchList(
+                            state.filteredMatches,
+                            MatchTabType.all,
+                            isDark,
+                          ),
+                          _buildMatchList(
+                            state.filteredMatches,
+                            MatchTabType.finished,
+                            isDark,
+                          ),
+                          _buildMatchList(
+                            state.filteredMatches,
+                            MatchTabType.scheduled,
+                            isDark,
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -156,5 +136,125 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildMatchList(
+    List<dynamic> matches,
+    MatchTabType type,
+    bool isDark,
+  ) {
+    final sortedItems = MatchSorter.getSortedMatches(matches.cast(), type);
+
+    if (sortedItems.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.sports_soccer_rounded,
+              size: 48,
+              color: isDark ? Colors.white24 : Colors.black12,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "No matches found",
+              style: TextStyle(
+                color: isDark ? Colors.white38 : Colors.black38,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: sortedItems.length + 1, // +1 for footnote
+      itemBuilder: (context, index) {
+        if (index == sortedItems.length) {
+          return const FootnoteSection();
+        }
+
+        final item = sortedItems[index];
+
+        if (item is MatchGroupHeader) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  item.title.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white70 : AppColors.textDark,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  height: 1,
+                  width: 100,
+                  color: isDark
+                      ? Colors.white10
+                      : Colors.black.withValues(alpha: 0.05),
+                ),
+              ],
+            ),
+          );
+        } else {
+          return MatchCard(match: item);
+        }
+      },
+    );
+  }
+}
+
+class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar _tabBar;
+  final bool isDark;
+
+  _StickyTabBarDelegate(this._tabBar, this.isDark);
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height + 1; // +1 for bottom border
+  @override
+  double get maxExtent => _tabBar.preferredSize.height + 1;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark
+                ? Colors.white10
+                : Colors.black.withValues(alpha: 0.05),
+            width: 1,
+          ),
+        ),
+      ),
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StickyTabBarDelegate oldDelegate) {
+    return false;
   }
 }

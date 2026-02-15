@@ -251,4 +251,5 @@ class RuleEngine:
             "h2h_n": len(h2h),
             "home_form_n": len(home_form),
             "away_form_n": len(away_form),
+            "total_xg": round(home_xg + away_xg, 2),
         }

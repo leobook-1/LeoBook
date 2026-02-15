@@ -2,22 +2,30 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // ─── Brand ───────────────────────────────────────────────
-  static const Color primary = Color(0xFF4A9EF7); // Softened modern blue
+  // ─── Brand ───────────────────────────────────────────────
+  static const Color primary = Color(0xFF137FEC); 
   static const Color electricBlue = primary;
 
   // ─── Backgrounds ─────────────────────────────────────────
-  static const Color backgroundLight = Color(0xFFF0F2F5);
-  static const Color backgroundDark = Color(0xFF0A0E14); // Deep dark base
-  static const Color surfaceDark = Color(0xFF0F1318);
+  static const Color backgroundLight = Color(0xFFF6F7F8);
+  static const Color backgroundDark = Color(0xFF101922);
+  static const Color surfaceDark = Color(0xFF182430);
+  
+  // ─── Desktop-Specific (Image Reference) ─────────────────
+  static const Color desktopSidebarBg = Color(0xFF0D141C);
+  static const Color desktopHeaderBg = Color(0xFF0F1720);
+  static const Color desktopActiveIndicator = Color(0xFF137FEC);
+  static const Color desktopSearchFill = Color(0xFF141F2B);
+
+  // ─── Solid Card Tokens (Legacy Restoration) ──────────────
+  static const Color cardDark = Color(0xFF182430);
+  static const Color cardLight = Colors.white;
 
   // ─── Glass Tokens ────────────────────────────────────────
-  static const Color glassDark = Color(0x80FFFFFF); // white 50%
-  static const Color glassLight = Color(
-    0x80FFFFFF,
-  ); // white 50% (Unified for a cleaner translucent look)
-  static const Color glassBorderDark = Color(0x33FFFFFF); // white 20%
-  static const Color glassBorderLight = Color(0x1A000000); // black 10%
-  static const Color cardDark = Color(0xFF151C24); // Slightly lighter than bg
+  static const Color glassDark = Color(0xFF182430);
+  static const Color glassLight = Colors.white;
+  static const Color glassBorderDark = Color(0xFF2C3E50);
+  static const Color glassBorderLight = Color(0xFFE2E8F0);
 
   // ─── States & Semantic ───────────────────────────────────
   static const Color liveRed = Color(0xFFFF3B30);
@@ -30,6 +38,7 @@ class AppColors {
   static const Color textDark = Color(0xFF0F172A);
   static const Color textLight = Color(0xFFF1F5F9);
   static const Color textGrey = Color(0xFF64748B);
+  static const Color textHint = Color(0xFF475569);
 
   // ─── Accents ─────────────────────────────────────────────
   static const Color aiPurple = Color(0xFF8B5CF6);

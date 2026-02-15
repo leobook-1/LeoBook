@@ -99,7 +99,9 @@ CREATE TABLE IF NOT EXISTS public.region_league (
     league TEXT,
     league_crest TEXT,
     league_url TEXT,
+    league_url TEXT,
     date_updated TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.region_league ENABLE ROW LEVEL SECURITY;
@@ -115,6 +117,7 @@ CREATE TABLE IF NOT EXISTS public.teams (
     rl_ids TEXT,
     team_crest TEXT,
     team_url TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
@@ -138,6 +141,7 @@ CREATE TABLE IF NOT EXISTS public.schedules (
     match_status TEXT,
     status TEXT,
     match_link TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
@@ -185,6 +189,7 @@ CREATE TABLE IF NOT EXISTS public.predictions (
     away_crest_url TEXT,
     is_recommended TEXT,
     recommendation_score TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.predictions ENABLE ROW LEVEL SECURITY;
@@ -209,6 +214,7 @@ CREATE TABLE IF NOT EXISTS public.standings (
     goal_difference INTEGER,
     points INTEGER,
     url TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.standings ENABLE ROW LEVEL SECURITY;
@@ -235,6 +241,7 @@ CREATE TABLE IF NOT EXISTS public.fb_matches (
     booking_code TEXT,
     booking_url TEXT,
     status TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.fb_matches ENABLE ROW LEVEL SECURITY;
@@ -246,17 +253,82 @@ CREATE POLICY "Public Read Access FBMatches" ON public.fb_matches FOR SELECT USI
 -- =============================================================================
 -- 5. UTILITY & MAINTENANCE
 -- =============================================================================
-CREATE OR REPLACE FUNCTION update_updated_at_column()
+CREATE OR REPLACE FUNCTION update_last_updated_column()
 RETURNS TRIGGER AS $$
 BEGIN
-   NEW.updated_at = NOW();
-   NEW.last_updated = NOW();
+   -- Robustly check for column existence before setting
+   IF EXISTS (
+       SELECT 1 FROM information_schema.columns 
+       WHERE table_schema = TG_TABLE_SCHEMA 
+       AND table_name = TG_TABLE_NAME 
+       AND column_name = 'updated_at'
+   ) THEN
+       NEW.updated_at = NOW();
+   END IF;
+
+   IF EXISTS (
+       SELECT 1 FROM information_schema.columns 
+       WHERE table_schema = TG_TABLE_SCHEMA 
+       AND table_name = TG_TABLE_NAME 
+       AND column_name = 'last_updated'
+   ) THEN
+       NEW.last_updated = NOW();
+   END IF;
+
    RETURN NEW;
 END;
 $$ language 'plpgsql';
 
-DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
-CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+DROP TRIGGER IF EXISTS update_profiles_last_updated ON public.profiles;
+CREATE TRIGGER update_profiles_last_updated BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE PROCEDURE update_last_updated_column();
 
-DROP TRIGGER IF EXISTS update_rules_updated_at ON public.custom_rules;
-CREATE TRIGGER update_rules_updated_at BEFORE UPDATE ON public.custom_rules FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+DROP TRIGGER IF EXISTS update_rules_last_updated ON public.custom_rules;
+CREATE TRIGGER update_rules_last_updated BEFORE UPDATE ON public.custom_rules FOR EACH ROW EXECUTE PROCEDURE update_last_updated_column();
+-- =============================================================================
+-- 6. REPORTING & AUDIT
+-- =============================================================================
+
+-- Accuracy Reports
+CREATE TABLE IF NOT EXISTS public.accuracy_reports (
+    report_id TEXT PRIMARY KEY,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    volume INTEGER DEFAULT 0,
+    win_rate DECIMAL(5,2) DEFAULT 0,
+    return_pct DECIMAL(5,2) DEFAULT 0,
+    period TEXT DEFAULT 'last_24h',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+ALTER TABLE public.accuracy_reports ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read Access AccuracyReports" ON public.accuracy_reports;
+CREATE POLICY "Public Read Access AccuracyReports" ON public.accuracy_reports FOR SELECT USING (true);
+
+-- Audit Log
+CREATE TABLE IF NOT EXISTS public.audit_log (
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    event_type TEXT NOT NULL,
+    description TEXT,
+    balance_before DECIMAL(15,2),
+    balance_after DECIMAL(15,2),
+    stake DECIMAL(15,2),
+    status TEXT DEFAULT 'success',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+-- We use a composite key or just allow duplicates for audit logs if needed, 
+-- but sync_manager expects a unique key. We'll use timestamp + event_type as a hint 
+-- or just timestamp if granular enough.
+ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read Access AuditLog" ON public.audit_log;
+CREATE POLICY "Public Read Access AuditLog" ON public.audit_log FOR SELECT USING (true);
+
+-- Triggers for last_updated
+DROP TRIGGER IF EXISTS update_reports_last_updated ON public.accuracy_reports;
+CREATE TRIGGER update_reports_last_updated BEFORE UPDATE ON public.accuracy_reports FOR EACH ROW EXECUTE PROCEDURE update_last_updated_column();
+
+DROP TRIGGER IF EXISTS update_audit_last_updated ON public.audit_log;
+CREATE TRIGGER update_audit_last_updated BEFORE UPDATE ON public.audit_log FOR EACH ROW EXECUTE PROCEDURE update_last_updated_column();
+
+-- grants
+GRANT SELECT ON public.accuracy_reports TO anon, authenticated;
+GRANT SELECT ON public.audit_log TO anon, authenticated;

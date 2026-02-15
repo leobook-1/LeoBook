@@ -8,83 +8,142 @@ class AccountScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 1024;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
+      backgroundColor: isDark
           ? AppColors.backgroundDark
           : AppColors.backgroundLight,
       body: SafeArea(
         child: BlocBuilder<UserCubit, UserState>(
           builder: (context, state) {
             final user = state.user;
-            return Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Profile",
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  _buildProfileCard(context, user),
-                  const SizedBox(height: 24),
-                  const Text(
-                    "Settings",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textGrey,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildSettingsItem(
-                    context,
-                    icon: Icons.notifications_outlined,
-                    title: "Notifications",
-                    onTap: () {},
-                  ),
-                  _buildSettingsItem(
-                    context,
-                    icon: Icons.language,
-                    title: "Language",
-                    subtitle: "English",
-                    onTap: () {},
-                  ),
-                  _buildSettingsItem(
-                    context,
-                    icon: Icons.help_outline,
-                    title: "Support",
-                    onTap: () {},
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        // Implement actual logout if needed
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Logged out")),
-                        );
-                      },
-                      icon: const Icon(Icons.logout, color: AppColors.liveRed),
-                      label: const Text(
-                        "Log Out",
-                        style: TextStyle(color: AppColors.liveRed),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.liveRed),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+            return SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop ? 64 : 24.0,
+                vertical: 32,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "MY ACCOUNT",
+                        style: TextStyle(
+                          fontSize: isDesktop ? 40 : 32,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1.5,
+                          color: Colors.white,
+                          fontStyle: FontStyle.italic,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 32),
+                      _buildProfileCard(context, user, isDesktop),
+                      const SizedBox(height: 48),
+                      const Text(
+                        "ACCOUNT SETTINGS",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.textGrey,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (isDesktop)
+                        GridView.count(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 24,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 4,
+                          children: [
+                            _buildSettingsItem(
+                              context,
+                              icon: Icons.notifications_outlined,
+                              title: "Notifications",
+                              onTap: () {},
+                            ),
+                            _buildSettingsItem(
+                              context,
+                              icon: Icons.language,
+                              title: "Language",
+                              subtitle: "English",
+                              onTap: () {},
+                            ),
+                            _buildSettingsItem(
+                              context,
+                              icon: Icons.help_outline,
+                              title: "Support",
+                              onTap: () {},
+                            ),
+                            _buildSettingsItem(
+                              context,
+                              icon: Icons.security_rounded,
+                              title: "Security & Privacy",
+                              onTap: () {},
+                            ),
+                          ],
+                        )
+                      else ...[
+                        _buildSettingsItem(
+                          context,
+                          icon: Icons.notifications_outlined,
+                          title: "Notifications",
+                          onTap: () {},
+                        ),
+                        _buildSettingsItem(
+                          context,
+                          icon: Icons.language,
+                          title: "Language",
+                          subtitle: "English",
+                          onTap: () {},
+                        ),
+                        _buildSettingsItem(
+                          context,
+                          icon: Icons.help_outline,
+                          title: "Support",
+                          onTap: () {},
+                        ),
+                      ],
+                      const SizedBox(height: 48),
+                      SizedBox(
+                        width: isDesktop ? 200 : double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Logged out")),
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.logout,
+                            color: AppColors.liveRed,
+                          ),
+                          label: const Text(
+                            "LOG OUT",
+                            style: TextStyle(
+                              color: AppColors.liveRed,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.liveRed),
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             );
           },
@@ -93,15 +152,15 @@ class AccountScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileCard(BuildContext context, dynamic user) {
+  Widget _buildProfileCard(BuildContext context, dynamic user, bool isDesktop) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isDesktop ? 32 : 20),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withValues(alpha: 0.06)
             : Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
@@ -111,51 +170,65 @@ class AccountScreen extends StatelessWidget {
       child: Row(
         children: [
           CircleAvatar(
-            radius: 30,
+            radius: isDesktop ? 44 : 30,
             backgroundColor: AppColors.primary.withValues(alpha: 0.1),
             child: Text(
               user.id.length >= 2
                   ? user.id.substring(0, 2).toUpperCase()
-                  : user.id.toUpperCase(), // Fake initials
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+                  : user.id.toUpperCase(),
+              style: TextStyle(
+                fontSize: isDesktop ? 28 : 20,
+                fontWeight: FontWeight.w900,
                 color: AppColors.primary,
               ),
             ),
           ),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                user.isPro ? "Pro Member" : "Free User",
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+          const SizedBox(width: 24),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.isPro ? "PRO MEMBER" : "FREE USER",
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                    color: AppColors.primary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                "ID: ${user.id.substring(0, user.id.length > 8 ? 8 : user.id.length)}...",
-                style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  "LEOBOOK ID: ${user.id.toUpperCase()}",
+                  style: TextStyle(
+                    fontSize: isDesktop ? 24 : 16,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
           if (user.isPro)
-            const Icon(Icons.verified, color: AppColors.primary)
+            const Icon(Icons.verified, color: AppColors.primary, size: 28)
           else
-            OutlinedButton(
+            ElevatedButton(
               onPressed: () {},
-              style: OutlinedButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                side: BorderSide(color: AppColors.primary),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text("UPGRADE"),
+              child: const Text(
+                "UPGRADE TO PRO",
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+              ),
             ),
         ],
       ),

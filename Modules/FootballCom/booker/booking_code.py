@@ -24,6 +24,9 @@ from .mapping import find_market_and_outcome
 from .slip import get_bet_slip_count
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from .slip import force_clear_slip
+from Data.Access.sync_manager import run_full_sync
+
 async def ensure_bet_insights_collapsed(page: Page):
     """Ensure the bet insights widget is collapsed to prevent obstruction."""
     try:
@@ -116,9 +119,10 @@ async def harvest_booking_codes(page: Page, matched_urls: Dict[str, str], day_pr
     """
     Chapter 1C: Odds Selection & Extraction.
     Follows flowchart: Navigate -> Select -> Book -> Save Code -> Clear Slip.
+    Includes 10-harvest progressive synchronization to Supabase.
     """
-    from .slip import force_clear_slip
     processed_urls = set()
+    harvest_success_count = 0
 
     # Pre-emptive clear ensuring a fresh start
     await force_clear_slip(page)
@@ -146,7 +150,6 @@ async def harvest_booking_codes(page: Page, matched_urls: Dict[str, str], day_pr
                 continue
 
             # 3. Search & Click Outcome
-            # (Re-using search/click logic with improvements)
             bet_added, odds = await find_and_click_outcome(page, m_name, o_name)
             
             if bet_added:
@@ -161,10 +164,15 @@ async def harvest_booking_codes(page: Page, matched_urls: Dict[str, str], day_pr
                     booking_code = await extract_booking_details(page)
                     if booking_code and booking_code != "N/A":
                         # Save to registries
-                        update_prediction_status(match_id, target_date, 'harvested', booking_code=booking_code, odds=odds)
+                        update_prediction_status(match_id, target_date, 'harvested', booking_code=booking_code, odds=str(odds))
                         site_id = get_site_match_id(target_date, pred['home_team'], pred['away_team'])
-                        update_site_match_status(site_id, 'harvested', booking_code=booking_code, odds=odds)
+                        update_site_match_status(site_id, 'harvested', booking_code=booking_code, odds=str(odds))
                         await save_booking_code(target_date, booking_code, page)
+                        
+                        harvest_success_count += 1
+                        if harvest_success_count % 10 == 0:
+                            print(f"\n    [Harvest Sync] Reached {harvest_success_count} successful harvests. Triggering cloud sync...")
+                            await run_full_sync()
                 
                 # Close Modal if open
                 close_sel = await get_selector_auto(page, "fb_match_page", "modal_close_button")
@@ -182,47 +190,64 @@ async def harvest_booking_codes(page: Page, matched_urls: Dict[str, str], day_pr
             print(f"    [Error] Harvest failed for match {match_id}: {e}")
             await capture_debug_snapshot(page, f"harvest_fail_{match_id}")
 
-async def find_and_click_outcome(page: Page, m_name: str, o_name: str) -> bool:
+    # Final sync if any new harvests occurred
+    if harvest_success_count > 0 and harvest_success_count % 10 != 0:
+        print(f"\n    [Harvest Sync] Finalizing sync for {harvest_success_count} harvests...")
+        await run_full_sync()
+
+async def find_and_click_outcome(page: Page, m_name: str, o_name: str) -> tuple:
     """Helper to search for and click the outcome button."""
     frame = await get_main_frame(page)
-    if not frame: return False
+    if not frame: return False, 1.0
 
-    # (Same robust search logic as before, distilled for clarity)
     search_sel = await get_selector_auto(page, "fb_match_page", "search_icon")
     input_sel = await get_selector_auto(page, "fb_match_page", "search_input")
     
-    if not search_sel or not input_sel: return False
+    if not search_sel or not input_sel:
+        print(f"    [Error] Missing search/input selectors for market discovery.")
+        return False, 1.0
 
     try:
-        await page.locator(search_sel).first.scroll_into_view_if_needed()
-        await page.locator(search_sel).first.click(force=True)
-        await asyncio.sleep(0.5)
+        # Clear search if already open
+        if await page.locator(input_sel).count() > 0 and await page.locator(input_sel).first.is_visible():
+            await page.locator(input_sel).first.fill("")
+        else:
+            await page.locator(search_sel).first.scroll_into_view_if_needed()
+            await page.locator(search_sel).first.click(force=True)
+            await asyncio.sleep(0.5)
+
         await page.locator(input_sel).first.fill(m_name)
         await page.keyboard.press("Enter")
         await asyncio.sleep(2)
 
-        # Outcome discovery
+        # Outcome discovery - using flexible text matching
         outcome_sel = f"button:has-text('{o_name}'), div[role='button']:has-text('{o_name}'), .m-outcome-item:has-text('{o_name}')"
         if await frame.locator(outcome_sel).count() > 0:
              target_btn = frame.locator(outcome_sel).first
              btn_text = await target_btn.inner_text()
              
-             # Attempt to parse odds from button text (e.g., "1.45")
+             # Attempt to parse odds from button text (e.g., "1.45" or "Over 2.5 1.45")
              odds = 1.0
              import re
-             odds_match = re.search(r"(\d+\.\d{2})", btn_text)
-             if odds_match:
-                 odds = float(odds_match.group(1))
-                 print(f"    [Chapter 1C] Extracted odds: {odds}")
+             # Extract numbers with two decimal places
+             odds_candidates = re.findall(r"(\d+\.\d{2})", btn_text)
+             if odds_candidates:
+                 # Usually the odds is the last number in the text if it contains the line (e.g. "Over 2.5 1.45")
+                 odds = float(odds_candidates[-1])
+                 print(f"    [Odds Capture] Extracted odds: {odds}")
 
              count_before = await get_bet_slip_count(page)
              await target_btn.scroll_into_view_if_needed()
              await target_btn.click(force=True)
              await asyncio.sleep(1)
+             
              success = await get_bet_slip_count(page) > count_before
              return success, odds
-    except:
-        pass
+        else:
+            print(f"    [Error] Outcome '{o_name}' not found for market '{m_name}'.")
+    except Exception as e:
+        print(f"    [Error] find_and_click_outcome failed: {e}")
+        
     return False, 1.0
 
 async def finalize_accumulator(page: Page, target_date: str) -> bool:

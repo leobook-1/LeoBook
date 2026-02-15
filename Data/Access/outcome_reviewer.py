@@ -11,10 +11,11 @@ Responsible for managing the review workflow, CSV operations, and outcome tracki
 import asyncio
 import csv
 import os
+import pandas as pd
+import pytz
 from datetime import datetime as dt, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
-from .prediction_evaluator import evaluate_prediction
 from .health_monitor import HealthMonitor
 from playwright.async_api import Playwright
 
@@ -40,6 +41,7 @@ from .db_helpers import (
     FB_MATCHES_CSV, files_and_headers, save_team_entry, save_region_league_entry
 )
 from .csv_operations import upsert_entry, _read_csv, _write_csv
+from .sync_manager import SyncManager
 from Core.Intelligence.intelligence import get_selector_auto, get_selector
 
 
@@ -58,73 +60,60 @@ def _load_schedule_db() -> Dict[str, Dict]:
 
 def get_predictions_to_review() -> List[Dict]:
     """
-    Reads the predictions CSV and returns a list of matches that are in the past
-    and have not yet been reviewed.
+    Reads the predictions CSV using pandas and returns a list of matches that 
+    are in the past (Africa/Lagos timezone) and still have a 'pending' status.
     """
     if not os.path.exists(PREDICTIONS_CSV):
         print(f"[Error] Predictions file not found at: {PREDICTIONS_CSV}")
         return []
 
-    to_review = []
-    today = dt.now().date()
+    try:
+        # 1. Load predictions with pandas
+        df = pd.read_csv(PREDICTIONS_CSV, dtype=str).fillna('')
+        
+        if df.empty:
+            return []
 
-    # Load the schedule DB once to avoid repeated file I/O
-    schedule_db = _load_schedule_db()
+        # 2. Filter for 'pending' status
+        df = df[df['status'] == 'pending']
+        if df.empty:
+            return []
 
-    with open(PREDICTIONS_CSV, 'r', encoding='utf-8', newline='') as f:
-        reader = csv.DictReader(f)
-        all_rows = list(reader)
+        # 3. Handle Date/Time Parsing
+        # Format in CSV is 14.02.2026 for date, 15:00 for match_time
+        def parse_dt(row):
+            try:
+                d_str = row.get('date') or row.get('Date')
+                t_str = row.get('match_time')
+                if not d_str or not t_str or t_str == 'N/A':
+                    return pd.NaT
+                return dt.strptime(f"{d_str} {t_str}", "%d.%m.%Y %H:%M")
+            except:
+                return pd.NaT
 
-    for row in reversed(all_rows):
-        if len(to_review) >= LOOKBACK_LIMIT:
-            break
+        df['scheduled_dt'] = df.apply(parse_dt, axis=1)
+        df = df.dropna(subset=['scheduled_dt'])
 
-        try:
-            match_date_str = row.get('Date') or row.get('date')
-            if not match_date_str:
-                continue
+        # 4. Timezone Awareness (Africa/Lagos)
+        lagos_tz = pytz.timezone('Africa/Lagos')
+        now_lagos = dt.now(lagos_tz)
+        
+        # Localize scheduled_dt if naive (usually it is)
+        df['scheduled_dt'] = df['scheduled_dt'].apply(lambda x: lagos_tz.localize(x) if x.tzinfo is None else x)
 
-            # Check for invalid time -> cancel match
-            match_time = row.get('match_time')
-            if not match_time or match_time == 'N/A':
-                if row.get('status') != 'match_canceled':
-                    save_single_outcome(row, 'match_canceled')
-                continue
+        # 5. Filter for past matches (scheduled_time < current_time)
+        to_review_df = df[df['scheduled_dt'] < now_lagos]
+        
+        # Limit to LOOKBACK_LIMIT
+        if len(to_review_df) > LOOKBACK_LIMIT:
+            to_review_df = to_review_df.tail(LOOKBACK_LIMIT)
 
-            match_date = dt.strptime(match_date_str, "%d.%m.%Y").date()
-            status = row.get('status')
+        # Return as list of dicts
+        return to_review_df.to_dict('records')
 
-            # Check eligibility: Date is past OR (Date is today AND Time is 4+ hours ago)
-            is_eligible = False
-            now = dt.now()
-
-            if match_date < today:
-                is_eligible = True
-            elif match_date == today:
-                try:
-                    match_dt = dt.combine(match_date, dt.strptime(match_time, "%H:%M").time())
-                    if now >= match_dt + timedelta(hours=4):
-                        is_eligible = True
-                except (ValueError, TypeError):
-                    pass
-
-            if is_eligible and status not in ['reviewed', 'match_canceled', 'review_failed', 'match_postponed']:
-                fixture_id = row.get('fixture_id')
-                # --- OPTIMIZATION: Check local DB first ---
-                if fixture_id and fixture_id in schedule_db:
-                    db_entry = schedule_db[fixture_id]
-                    if db_entry.get('match_status') == 'finished' and db_entry.get('home_score'):
-                        row['actual_score'] = f"{db_entry['home_score']}-{db_entry['away_score']}"
-                        row['source'] = 'db' # Mark as found in DB
-                        to_review.append(row)
-                        continue # Move to next prediction
-
-                # Fallback to web scraping if not in DB or not finished
-                match_link = row.get('match_link')
-                if match_link and "flashscore" in match_link:
-                        to_review.append(row)
-        except (ValueError, TypeError):
-            continue
+    except Exception as e:
+        print(f"[Error] get_predictions_to_review logic failed: {e}")
+        return []
 
 def get_schedules_to_update(full_refresh=False) -> List[Dict]:
     """
@@ -171,10 +160,8 @@ def smart_parse_datetime(dt_str: str):
         parts = dt_str.split()
         if len(parts) == 2:
             d_part, t_part = parts
-            # Standardize date to YYYY-MM-DD
-            if '.' in d_part:
-                p = d_part.split('.')
-                d_part = f"{p[2]}-{p[1]}-{p[0]}"
+            # Keep original DD.MM.YYYY for local CSV compatibility
+            # (SyncManager handles YYYY-MM-DD conversion for Supabase)
             return d_part, t_part
     except:
         pass
@@ -213,14 +200,21 @@ def save_single_outcome(match_data: Dict, new_status: str):
                     if 'home_score' in match_data and 'away_score' in match_data:
                         row['actual_score'] = f"{match_data['home_score']}-{match_data['away_score']}"
 
-                    if new_status == 'reviewed':
+                    if new_status in ['reviewed', 'finished']:
+                        from .review_outcomes import evaluate_prediction as final_eval
                         prediction = row.get('prediction', '')
                         actual_score = row.get('actual_score', '')
-                        home_team = row.get('home_team', '')
-                        away_team = row.get('away_team', '')
-                        is_correct = evaluate_prediction(prediction, actual_score, home_team, away_team)
-                        if is_correct is not None:
+                        
+                        try:
+                            h_core, a_core = actual_score.split('-')
+                            is_correct = final_eval(prediction, h_core, a_core)
                             row['outcome_correct'] = str(is_correct)
+                            
+                            # Immediate Sync (Real-time update)
+                            print(f"      [Cloud] Immediate sync for {target_id}...")
+                            asyncio.create_task(SyncManager().batch_upsert('predictions', [row]))
+                        except Exception as eval_err:
+                            print(f"      [Eval Error] {eval_err}")
 
                     updated = True
 
@@ -436,15 +430,19 @@ async def process_enrichment_task(match: Dict, browser, semaphore: asyncio.Semap
             await context.close()
 
 
-async def process_review_task(match: Dict, browser, semaphore: asyncio.Semaphore) -> None:
+async def process_review_task(match: Dict, browser, semaphore: asyncio.Semaphore) -> Optional[Dict]:
     """
-    Task to review a single past prediction.
+    Task to review a single past prediction using an isolated context.
+    Returns the updated match dict if successful for batch syncing.
     """
     async with semaphore:
-        from playwright.async_api import async_playwright
         from Core.Browser.site_helpers import fs_universal_popup_dismissal
 
-        context = await browser.new_context(viewport={"width": 1280, "height": 720})
+        # isolated headless context
+        context = await browser.new_context(
+            viewport={"width": 1280, "height": 720},
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        )
         await context.route("**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2}", lambda route: route.abort())
         page = await context.new_page()
 
@@ -452,7 +450,7 @@ async def process_review_task(match: Dict, browser, semaphore: asyncio.Semaphore
         if not url:
             save_single_outcome(match, 'review_failed')
             await context.close()
-            return
+            return None
 
         if not url.startswith('http'):
             url = f"https://www.flashscore.com{url}"
@@ -466,16 +464,23 @@ async def process_review_task(match: Dict, browser, semaphore: asyncio.Semaphore
             
             if final_score == "Error":
                 save_single_outcome(match, 'review_failed')
+                return None
             elif final_score == "Match_POSTPONED":
                 save_single_outcome(match, 'match_postponed')
+                return None
             elif final_score != "NOT_FINISHED":
                 match['actual_score'] = final_score
-                save_single_outcome(match, 'reviewed')
-                print(f"    [Result] {match.get('home_team')} {final_score} {match.get('away_team')}")
+                # Update status to 'finished' as requested
+                save_single_outcome(match, 'finished')
+                print(f"    [Result] {match.get('home_team')} {final_score} {match.get('away_team')}", flush=True)
+                return match
+
+            return None
 
         except Exception as e:
             print(f"    [Error] Review failed: {e}")
             save_single_outcome(match, 'review_failed')
+            return None
         finally:
             await context.close()
 
@@ -590,21 +595,28 @@ async def run_review_process(playwright: Playwright):
 
     try:
         sem = asyncio.Semaphore(BATCH_SIZE)
-        tasks = []
-
-        # Queue enrichment tasks
-        if schedules_to_update:
-            print(f"[Processing] Starting batch enrichment for {len(schedules_to_update)} schedules...")
-            for s in schedules_to_update:
-                tasks.append(asyncio.create_task(process_enrichment_task(s, browser, sem)))
-
-        # Queue review tasks
+        
         if matches_to_review:
-            print(f"[Processing] Starting batch review for {len(matches_to_review)} matches...")
-            for match in matches_to_review:
-                tasks.append(asyncio.create_task(process_review_task(match, browser, sem)))
+            print(f"[Processing] Starting concurrent review for {len(matches_to_review)} matches...")
+            sync_manager = SyncManager()
+            
+            # Process reviews in batches to handle periodic sync
+            for i in range(0, len(matches_to_review), 10):
+                batch_chunk = matches_to_review[i:i+10]
+                tasks = [asyncio.create_task(process_review_task(m, browser, sem)) for m in batch_chunk]
+                results = await asyncio.gather(*tasks)
+                
+                # Filter successful results for sync
+                reviewed_rows = [r for r in results if r is not None]
+                if reviewed_rows:
+                    print(f"   [Sync] Periodic Upsert: Sending {len(reviewed_rows)} reviewed entries to Cloud...", flush=True)
+                    await sync_manager.batch_upsert('predictions', reviewed_rows)
 
-        await asyncio.gather(*tasks)
+        # 1. Enrichment tasks (if any)
+        if schedules_to_update:
+            print(f"[Processing] Starting batch enrichment for {len(schedules_to_update)} schedules...", flush=True)
+            enrich_tasks = [asyncio.create_task(process_enrichment_task(s, browser, sem)) for s in schedules_to_update]
+            await asyncio.gather(*enrich_tasks)
 
         # 3. Final Sync
         sync_schedules_to_predictions()
@@ -621,5 +633,12 @@ async def run_review_process(playwright: Playwright):
             
     finally:
         await browser.close()
+
+    # 4. Accuracy Generation (Prologue Page 3)
+    try:
+        from .review_outcomes import run_accuracy_generation
+        await run_accuracy_generation()
+    except Exception as e:
+        print(f"--- Accuracy Generation Error: {e} ---")
 
     print("--- Review Process Complete ---")

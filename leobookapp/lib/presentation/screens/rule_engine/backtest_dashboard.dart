@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:leobookapp/data/models/rule_config_model.dart';
 import 'package:leobookapp/data/services/leo_service.dart';
+import 'package:leobookapp/core/constants/app_colors.dart';
 import 'rule_editor_screen.dart';
 
 class BacktestDashboard extends StatefulWidget {
@@ -84,79 +85,143 @@ class _BacktestDashboardState extends State<BacktestDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 1024;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Backtest Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const RuleEditorScreen(),
+      backgroundColor: isDark ? AppColors.backgroundDark : Colors.white,
+      appBar: isDesktop
+          ? null
+          : AppBar(
+              title: const Text('Backtest Dashboard'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const RuleEditorScreen(),
+                      ),
+                    );
+                    _loadInitialData();
+                  },
                 ),
-              );
-              _loadInitialData(); // Refresh on return
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshResults,
-          ),
-        ],
-      ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _refreshResults,
+                ),
+              ],
+            ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                _buildSummaryCard(),
-                const Divider(),
-                Expanded(child: _buildResultsList()),
-              ],
+          : SingleChildScrollView(
+              padding: EdgeInsets.all(isDesktop ? 32 : 16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1000),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (isDesktop) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "RULE ENGINE",
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: -1,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                _buildHeaderAction(
+                                  Icons.settings_outlined,
+                                  "EDITOR",
+                                  () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const RuleEditorScreen(),
+                                      ),
+                                    );
+                                    _loadInitialData();
+                                  },
+                                ),
+                                const SizedBox(width: 12),
+                                _buildHeaderAction(
+                                  Icons.refresh,
+                                  "REFRESH",
+                                  _refreshResults,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                      ],
+                      _buildSummaryCard(isDesktop),
+                      const SizedBox(height: 32),
+                      const Text(
+                        "HISTORICAL RESULTS",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.textGrey,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (isDesktop)
+                        _buildResultsGrid()
+                      else
+                        _buildResultsList(),
+                    ],
+                  ),
+                ),
+              ),
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _runBacktest,
-        label: const Text("Run Backtest"),
-        icon: const Icon(Icons.play_arrow),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        label: const Text(
+          "RUN BACKTEST",
+          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
+        ),
+        icon: const Icon(Icons.play_arrow_rounded),
       ),
     );
   }
 
-  Widget _buildSummaryCard() {
-    int total = _results.length;
-    int correct = _results
-        .where((r) => r['outcome_correct'] == 'True')
-        .length; // Assuming 'outcome_correct' column
-    // If outcome_correct isn't in CSV yet (because fs_offline.py needs to verify it), we might mock
-    // Just using what we have.
-
-    // Actually, fs_offline.py saves 'actual_score' and 'prediction'. We can recalc here or just show list.
-    // Let's deduce correctness if possible.
-
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+  Widget _buildHeaderAction(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDark,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Row(
           children: [
+            Icon(icon, color: Colors.white70, size: 18),
+            const SizedBox(width: 8),
             Text(
-              "Config: ${_currentConfig?.name ?? 'Default'}",
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _statItem("Matches", "$total"),
-                _statItem(
-                  "Accuracy",
-                  isNaN(correct / total)
-                      ? "N/A"
-                      : "${(correct / total * 100).toStringAsFixed(1)}%",
-                ),
-                // _statItem("ROI", "+15% (Mock)"),
-              ],
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: Colors.white70,
+                letterSpacing: 1,
+              ),
             ),
           ],
         ),
@@ -164,40 +229,202 @@ class _BacktestDashboardState extends State<BacktestDashboard> {
     );
   }
 
+  Widget _buildSummaryCard(bool isDesktop) {
+    int total = _results.length;
+    int correct = _results.where((r) => r['outcome_correct'] == 'True').length;
+
+    return Container(
+      padding: EdgeInsets.all(isDesktop ? 32 : 16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.analytics_outlined,
+                color: AppColors.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "CONFIG: ${_currentConfig?.name.toUpperCase() ?? 'DEFAULT'}",
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textGrey,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _statItem("TOTAL MATCHES", "$total"),
+              _statItem(
+                "WIN RATE",
+                isNaN(correct / total)
+                    ? "N/A"
+                    : "${(correct / total * 100).toStringAsFixed(1)}%",
+              ),
+              _statItem("PROFIT/LOSS", "N/A"),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   bool isNaN(double v) => v.isNaN || v.isInfinite;
 
   Widget _statItem(String label, String value) {
+    final isPrimary = label == "WIN RATE";
     return Column(
       children: [
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.blueAccent,
+          style: TextStyle(
+            fontSize: isPrimary ? 32 : 24,
+            fontWeight: FontWeight.w900,
+            color: isPrimary ? AppColors.successGreen : Colors.white,
+            fontStyle: FontStyle.italic,
           ),
         ),
-        Text(label, style: const TextStyle(color: Colors.grey)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textGrey,
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1,
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildResultsGrid() {
+    if (_results.isEmpty) {
+      return const Center(
+        child: Text(
+          "No backtest results found. Run a backtest!",
+          style: TextStyle(color: AppColors.textGrey),
+        ),
+      );
+    }
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 2.2,
+      ),
+      itemCount: _results.length,
+      itemBuilder: (context, index) {
+        final row = _results[index];
+        final isWin = row['outcome_correct'] == 'True';
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.backgroundDark.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isWin
+                  ? AppColors.successGreen.withValues(alpha: 0.2)
+                  : Colors.white10,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "MATCH #${index + 1}",
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textGrey,
+                    ),
+                  ),
+                  if (isWin)
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      color: AppColors.successGreen,
+                      size: 14,
+                    ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                "${row['home_team']} VS ${row['away_team']}".toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "PRED: ${row['prediction']} · ACTUAL: ${row['actual_score']}",
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textGrey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _buildResultsList() {
     if (_results.isEmpty) {
       return const Center(
-        child: Text("No backtest results found. Run a backtest!"),
+        child: Text(
+          "No backtest results found. Run a backtest!",
+          style: TextStyle(color: AppColors.textGrey),
+        ),
       );
     }
     return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: _results.length,
       itemBuilder: (context, index) {
         final row = _results[index];
-        return ListTile(
-          title: Text("${row['home_team']} vs ${row['away_team']}"),
-          subtitle: Text(
-            "Pred: ${row['prediction']} | Actual: ${row['actual_score']}",
+        final isWin = row['outcome_correct'] == 'True';
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          color: AppColors.surfaceDark,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          trailing: Text(row['confidence'] ?? ''),
+          child: ListTile(
+            title: Text(
+              "${row['home_team']} vs ${row['away_team']}",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text(
+              "Pred: ${row['prediction']} | Actual: ${row['actual_score']}",
+              style: const TextStyle(fontSize: 12),
+            ),
+            trailing: isWin
+                ? const Icon(Icons.check_circle, color: AppColors.successGreen)
+                : const Icon(Icons.cancel, color: AppColors.liveRed),
+          ),
         );
       },
     );

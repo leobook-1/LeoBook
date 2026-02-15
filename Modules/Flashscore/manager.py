@@ -8,6 +8,7 @@ Pure coordinator of Chapter 1A and 1B logic.
 """
 
 import asyncio
+import os
 from datetime import datetime as dt, timedelta
 from zoneinfo import ZoneInfo
 from playwright.async_api import Playwright
@@ -19,7 +20,6 @@ from Core.Browser.site_helpers import fs_universal_popup_dismissal, click_next_d
 from Core.Utils.utils import BatchProcessor
 from Core.Utils.monitor import PageMonitor
 from Core.Intelligence.selector_manager import SelectorManager
-from Scripts.recommend_bets import get_recommendations
 from Core.Utils.constants import NAVIGATION_TIMEOUT, WAIT_FOR_LOAD_STATE_TIMEOUT
 
 # Modular Imports
@@ -49,7 +49,9 @@ async def run_flashscore_analysis(playwright: Playwright):
         )
         page = await context.new_page()
         PageMonitor.attach_listeners(page)
-        processor = BatchProcessor(max_concurrent=5)
+        
+        # Concurrency settings from environment (as baseline)
+        env_concurrency = int(os.getenv('FLASHSCORE_CONCURRENCY', 5))
 
         total_cycle_predictions = 0
 
@@ -109,15 +111,35 @@ async def run_flashscore_analysis(playwright: Playwright):
 
             matches_data.sort(key=lambda x: x.get('time', '23:59'))
 
+            # --- Load existing predictions for robust resume ---
+            from Data.Access.db_helpers import PREDICTIONS_CSV
+            import csv
+            existing_ids = set()
+            if os.path.exists(PREDICTIONS_CSV):
+                try:
+                    with open(PREDICTIONS_CSV, 'r', encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        existing_ids = {row['fixture_id'] for row in reader if row.get('fixture_id')}
+                except Exception:
+                    pass
+
             # --- Save to DB & Filter ---
             valid_matches = []
             now_time = dt.now(NIGERIA_TZ).time()
             is_today = target_date.date() == dt.now(NIGERIA_TZ).date()
 
+            def is_time_parsable(t_str):
+                try:
+                    dt.strptime(t_str, '%H:%M')
+                    return True
+                except (ValueError, TypeError):
+                    return False
+
             for m in matches_data:
+                fixture_id = m.get('id')
                 m['date'] = target_full
                 save_schedule_entry({
-                    'fixture_id': m.get('id'), 'date': m.get('date'), 'match_time': m.get('time'),
+                    'fixture_id': fixture_id, 'date': m.get('date'), 'match_time': m.get('time'),
                     'region_league': m.get('region_league'), 'home_team': m.get('home_team'),
                     'away_team': m.get('away_team'), 'home_team_id': m.get('home_team_id'),
                     'away_team_id': m.get('away_team_id'), 'match_status': 'scheduled',
@@ -126,31 +148,49 @@ async def run_flashscore_analysis(playwright: Playwright):
                 save_team_entry({'team_id': m.get('home_team_id'), 'team_name': m.get('home_team'), 'region_league': m.get('region_league'), 'team_url': m.get('home_team_url')})
                 save_team_entry({'team_id': m.get('away_team_id'), 'team_name': m.get('away_team'), 'region_league': m.get('region_league'), 'team_url': m.get('away_team_url')})
 
+                # Robust Resume: Skip if already predicted
+                if fixture_id in existing_ids:
+                    continue
+
                 if is_today:
-                    try:
-                        if m.get('time') and m['time'] != 'N/A' and dt.strptime(m['time'], '%H:%M').time() > now_time:
+                    time_str = m.get('time')
+                    if is_time_parsable(time_str):
+                        if dt.strptime(time_str, '%H:%M').time() > now_time:
                             valid_matches.append(m)
-                    except ValueError:
-                        pass
+                    else:
+                        # Non-parsable time (Postponed, etc) - Keep it in valid_matches for analysis
+                        # unless it's explicitly 'N/A' or 'Fin'
+                        if time_str not in ('N/A', 'Fin', 'Finished', 'CAN'):
+                            valid_matches.append(m)
                 else:
                     valid_matches.append(m)
 
-            print(f"    [Matches Found] {len(valid_matches)} valid fixtures.")
-
-            # --- Resume Logic ---
-            if last_processed_info.get('date') == target_full:
-                last_id = last_processed_info.get('id')
-                try:
-                    found_index = [i for i, match in enumerate(valid_matches) if match.get('id') == last_id][0]
-                    valid_matches = valid_matches[found_index + 1:]
-                except IndexError:
-                    pass
-
-            # --- Batch Processing ---
+            # --- Batch Processing With Dynamic Concurrency ---
             if valid_matches:
-                print(f"    [Batching] Processing {len(valid_matches)} matches concurrently...")
-                results = await processor.run_batch(valid_matches, process_match_task, browser=browser)
-                total_cycle_predictions += sum(1 for r in results if r)
+                # Dynamic scaling
+                if len(valid_matches) > 100:
+                    max_concurrent = min(env_concurrency + 3, 10) # Aggressive
+                elif len(valid_matches) < 20:
+                    max_concurrent = max(env_concurrency - 2, 2) # Conservative
+                else:
+                    max_concurrent = env_concurrency             # Standard
+                
+                print(f"    [Batching] Processing {len(valid_matches)} matches concurrently (Scaling: {max_concurrent})...")
+                processor = BatchProcessor(max_concurrent=max_concurrent)
+                
+                # Process in smaller chunks to trigger frequent syncs
+                analysis_chunk_size = 10
+                for i in range(0, len(valid_matches), analysis_chunk_size):
+                    chunk = valid_matches[i:i + analysis_chunk_size]
+                    chunk_results = await processor.run_batch(chunk, process_match_task, browser=browser)
+                    
+                    successful_in_chunk = sum(1 for r in chunk_results if r)
+                    total_cycle_predictions += successful_in_chunk
+                    
+                    if successful_in_chunk > 0:
+                        print(f"\n   [Analytics Sync] {total_cycle_predictions} predictions generated. Triggering micro-batch sync...")
+                        from Data.Access.sync_manager import run_full_sync
+                        await run_full_sync()
             else:
                 print("    [Info] No new matches to process.")
 
@@ -161,8 +201,4 @@ async def run_flashscore_analysis(playwright: Playwright):
              await browser.close()
              
     print(f"\n--- Data Extraction & Analysis Complete: {total_cycle_predictions} new predictions found. ---")
-    
-    # Trigger Recommendations
-    print("\n   [Auto] Generating betting recommendations for today...")
-    get_recommendations(save_to_file=True)
 
