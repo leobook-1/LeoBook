@@ -1,18 +1,47 @@
-12th February 2026
+LeoBook Developer Tasks — Updated 2026-02-17
 
 
-1. LeoBook App: I need you to verify that that the ui and ux is completely functional with no hardcoded strings or values or the use of mock data/strings. all should and must be dynamically sync able from the supabase database.
+1. LeoBook App (Flutter): 
+   STATUS: ✅ IMPLEMENTED (v2.8)
+   All UI data is dynamically synced from Supabase. No hardcoded strings, mock data, or placeholder values. 
+   Repository pattern: data_repository.dart fetches from Supabase with local caching.
+   Responsive layout system via responsive_constants.dart with constraints-based design.
+   75% uniform UI scaling via Transform.scale in main.dart builder.
 
+2. Prologue (formerly Chapter 0): Enrichment & Outcome Review
+   STATUS: ✅ IMPLEMENTED (v2.8)
+   SyncManager.sync_on_startup() handles bi-directional Supabase sync.
+   outcome_reviewer.py visits match URLs to extract final scores, reviews W/L/D.
+   enrich_all_schedules.py visits all 22k+ match URLs to extract/upsert:
+     - teams.csv (team IDs, crests, URLs)
+     - region_league.csv (region-league mappings)  
+     - schedules.csv (missing datetime, scores, status backfill)
+     - standings.csv (league tables)
+   Status column in schedules.csv: scheduled/postponed/cancelled/finished.
+   Live match detection in Flutter UI: match_date == today AND match_time >= now < (match_time + 2.5h).
 
-2. Chapter 0: To the chapter 0 make it able to upsert the schedules.csv, teams.csv and region_league.csv data. This is done by visiting each match url in all 22k matches of the schedules.csv, to  extract the data and upsert the teams.csv and the region_legion.csv also upserting if there are any missing (UNKNOWN or N/A or similar) entries of the schedules.csv and predictions.csv as well as final score for the give match and perform also the default review operations. Most match date and time are often merged together in the match page, so make smart detection of time and date and upsert them to their right column
-Add status column in the schedules.csv (upsert supabase database as well), so the UI can quickly determine if a match is scheduled, postponed, cancelled or finished. Live matches will be automatically determined by the UI using: if match date = current date then if match time >= current time < (match time + 2.5hrs), than the match is Live (i trust this logic is sound. make it better if not sound).
+3. Chapter 1B: Custom Rule Engine & LeoBook Lite
+   STATUS: PLANNED (not yet implemented)
+   Offline reprediction (main_offline_repredict) exists in Leo.py via fs_offline.py.
+   Custom rule engine creation, storage, backtesting, and accuracy comparison: NOT YET BUILT.
+   User account tiers (Lite vs unregistered): NOT YET BUILT.
+   Custom predictions visible only to the creating user: NOT YET BUILT.
+   Rule documentation and comparison dashboard: NOT YET BUILT.
+   
+   Existing infrastructure that supports this:
+     - rule_engine.py + rule_config.py: supports custom rule definitions
+     - learning_engine.py: supports alternative weight matrices  
+     - fs_offline.py: supports reprediction without browser
+     - Firebase Auth scaffold exists in auth_repository.dart
+     - Rule editor UI exists: rule_editor_screen.dart + backtest_dashboard.dart
 
+4. LeoBook Pro:
+   STATUS: PLANNED (not yet implemented)
+   Full access to Chapters 0-3 (Prologue + Ch1 + Ch2 + Ch3).
+   Automated booking + withdrawal management for Pro users.
+   Requires: account system (Firebase Auth), subscription management, access control middleware.
 
-3. Chapter 1B: By default this is integrated into 1A, however it should be understand that this refers to the main_offline_repredict we already have in the Leo.py which similar re-predicts the upcoming matches using new learning weights. This chapter 1B is that main_offline_repredict which will now be upgraded to enable setting a new prediction rule all round which will enable the user create a unlimited version of predictions.csv and learning weights, by tweaking the rule engine (which also completely reversible to defaults), like the number of past games for each teams and h2h to use for predictions, an so many tweaking of the rule engine as well as creating a totally different rule engine (without overwriting the defaults). This will enable the user remake the past, present and future predictions as best as they want and seeing instant results and  using the past to determine the accuracy and efficiency of the rules they created.
-However, for the user to use this 1B features, they must have an account with LeoBook, which is by default the LeoBook Lite account, which allows then to create store and analyze the impact of their custom rules with full back testability instantly. These custom predictions will be only available to them with an option to reset to defaults while documenting the rules they created and the impact, accuracy to reality and its efficiency, so they can create more independent rules, switch to another or delete any rules or reset to the default rule.
-Ultimately, LeoBook Lite is the default version of a registered user account and give users access and control to the chapter 0, 1A, 1B and 1C. The unregistered user is only allowed to access chapter 0, 1A(remember, this uses the default rule engine which the use cant change to make predictions) and 1C.
-
-
-4. LeoBook Pro: This is the ultimate version of LeoBook registered user. Here the user have full access, control and automation as per the chapter 0, 1A, 1B, 1C, 2A, 2B and 3 of the LeoBook.
-
-
+   Access Control Matrix:
+     - Unregistered:   Prologue (read-only), Ch1-A (default rules), Ch1-C (odds view)
+     - LeoBook Lite:   + Ch1-B (custom rules, backtesting, custom predictions)
+     - LeoBook Pro:    + Ch2 (automated booking/withdrawal), Ch3 (oversight dashboard)

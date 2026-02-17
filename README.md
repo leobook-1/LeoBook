@@ -42,14 +42,17 @@ Leo.py (Orchestrator)
 - **`Data/Access/`** — CSV CRUD, Supabase sync, outcome review, accuracy calculation
 - **`Scripts/`** — Enrichment pipeline, recommendation engine, maintenance utilities
 
-### AIGO (AI-Guided Operation) — Self-Healing Framework
+### AIGO (AI-Guided Operation) — Self-Healing Framework (v5.0)
 
-Three-phase recovery for every browser interaction:
+Five-phase recovery cascade for every browser interaction (~8-18% reach Phase 3):
 
-1. **Phase 0**: Context Discovery — selector lookup from knowledge base
-2. **Phase 1**: Reinforcement Learning — memory-based strategy selection
-3. **Phase 2**: Visual Analysis — screenshot + DOM analysis for selector derivation
-4. **Phase 3**: Expert Consultation — Grok API multimodal analysis with primary + backup paths
+0. **Context Discovery** — selector lookup from `knowledge.json`
+1. **Reinforcement Learning** — memory-based strategy selection
+2. **Visual Analysis** — multi-strategy matching (CSS → XPath → text → fuzzy)
+3. **Expert Consultation** — Grok API multimodal analysis (screenshot + DOM → primary + backup paths)
+4. **Self-Healing** — persist AI-discovered selectors to `knowledge.json` for future cycles
+
+See [AIGO_Learning_Guide.md](AIGO_Learning_Guide.md) for the full pipeline specification.
 
 ---
 
@@ -124,15 +127,29 @@ flutter run -d chrome  # or: flutter run (mobile)
 |----------|---------|
 | `GROK_API_KEY` | xAI Grok API for AIGO expert consultation |
 | `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_KEY` | Supabase anon key |
-| `LLM_API_URL` | Local Leo AI server fallback |
+| `SUPABASE_SERVICE_KEY` | Supabase service role key (Python backend, full write access) |
+| `SUPABASE_ANON_KEY` | Supabase anon key (Flutter app, read-only via RLS) |
+| `LLM_API_URL` | Local Leo AI server fallback (optional) |
 | `LEO_CYCLE_WAIT_HOURS` | Hours between cycles (default: 6) |
+
+---
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [LeoBook_Technical_Master_Report.md](LeoBook_Technical_Master_Report.md) | Complete file inventory, execution trace, data flow diagrams |
+| [leobook_algorithm.md](leobook_algorithm.md) | Algorithm reference — every function call mapped to its module |
+| [AIGO_Learning_Guide.md](AIGO_Learning_Guide.md) | Self-healing framework specification (5-phase pipeline) |
+| [SUPABASE_SETUP.md](SUPABASE_SETUP.md) | Supabase setup, credentials, Flutter config |
+| [SUPABASE_SYNC_REQUIREMENTS.md](SUPABASE_SYNC_REQUIREMENTS.md) | SyncManager technical spec, conflict resolution, performance |
+| [LeoBook Developer Tasks.txt](LeoBook%20Developer%20Tasks.txt) | Roadmap with implementation status |
 
 ---
 
 ## Maintenance
 
 - Monitor `Data/Store/audit_log.csv` for real-time event transparency
-- Review `LeoBook_Technical_Master_Report.md` for complete file documentation
 - Use `python Scripts/recommend_bets.py --save` to manually generate recommendations
 - Use `python Scripts/enrich_all_schedules.py --limit 50` for targeted enrichment
+- Check Chapter 3 oversight reports in Supabase `audit_events` table

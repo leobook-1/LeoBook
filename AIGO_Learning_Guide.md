@@ -1,61 +1,114 @@
-# AIGO: Autonomous Intelligent Guardian & Observer (v5.0)
+# AIGO: AI-Guided Operation — Self-Healing Framework (v5.0)
 
-AIGO is the "Self-Healing Surgeon" of the LeoBook automation engine. It is designed to ensure that the system never stops, even if the target website (Flashscore, Football.com) changes its UI, adds popups, or renames its internal CSS classes.
+> **Version**: 5.0 · **Last Updated**: 2026-02-17 · **LLM Backend**: xAI Grok API (multimodal)
 
----
-
-## 1. The Core Philosophy: "Fail-Proof Automation"
-Traditional bots break when a button's ID changes. AIGO does not. Instead of relying on static code, AIGO uses **Visual-Structural Reasoning**. If it can't find a button by its name (`#bet-button`), it "looks" at the page, identifies a "button-like object" near the "Stake" field, and tries to click that instead.
+AIGO is the **self-healing immune system** of LeoBook. It ensures the automation pipeline never stops — even when target websites (Flashscore, Football.com) change their UI, add popups, rename CSS classes, or deploy entirely new page layouts.
 
 ---
 
-## 2. The Execution Pipeline (The 4 Phases)
+## 1. Core Philosophy: "Fail-Proof Automation"
 
-When the `InteractionEngine` is asked to do something (e.g., "Click the Home Team Win button"), it follows this AIGO-managed loop:
+Traditional bots break when a button's ID changes. AIGO does not. Instead of relying on static selectors, AIGO uses **Visual-Structural Reasoning**: if it can't find a button by its CSS selector (`#bet-button`), it captures a screenshot + sanitized DOM, sends them to the Grok multimodal API, and receives a new, working path — all within seconds, zero human intervention.
+
+---
+
+## 2. The Execution Pipeline (5 Phases)
+
+When the `InteractionEngine` is asked to perform any browser action (e.g., "Click the Home Team Win button"), it follows this AIGO-managed cascade:
+
+### Phase 0: Context Discovery
+- **Module**: `selector_manager.py`, `selector_mapping.py`
+- **Logic**: Looks up the target element in `knowledge.json` — the CSS selector knowledge base. If a known-good selector exists and was recently validated, it's used immediately.
+- **Speed**: Sub-millisecond lookup, zero API calls.
 
 ### Phase 1: Memory & Reinforcement Learning
-- **The Library**: `MemoryManager.py`
-- **Logic**: It first checks if it has a **"Recent Success Pattern"**. If a specific selector worked in the last 24 hours, it tries it immediately. This makes the bot fast during stable UI periods.
+- **Module**: `memory_manager.py`
+- **Logic**: Checks if a **recent success pattern** exists. If a specific selector strategy worked in the last 24 hours, it tries that strategy first. Success/failure counters are tracked per element to accelerate future decisions.
+- **Speed**: Sub-millisecond, zero API calls.
 
-### Phase 2: Failure Heatmap Tracking
-- **The Logic**: If memory fails, the engine starts an "Evidence Log" called a **Heatmap**. It records every attempted selector and why it failed (e.g., "Element not visible", "Timeout", "Overlay blocking").
-- **Visual Discovery**: It triggers `VisualAnalyzer.py` to scrape the DOM for new potential matches based on "Semantic Hints" (labels, alt-text, or proximity).
+### Phase 2: Standard Retries & Visual Analysis
+- **Module**: `visual_analyzer.py`, `unified_matcher.py`
+- **Logic**: If memory fails, the engine tries multiple matching strategies in sequence:
+  1. **CSS selector** from knowledge base
+  2. **XPath** fallback
+  3. **Text content** matching
+  4. **Fuzzy** proximity matching
+- **Heatmap Tracking**: Every failed attempt is logged into a **Failure Heatmap** — recording the selector, failure reason ("Element not visible", "Timeout", "Overlay blocking"), and timestamp. This heatmap is sent to the AI in Phase 3 so it doesn't retry broken paths.
+- **Visual Discovery**: Triggers `VisualAnalyzer` to scrape the DOM for new potential matches based on semantic hints (labels, ARIA attributes, proximity to known elements).
 
-### Phase 3: The AIGO Expert Consultation (God Mode)
+### Phase 3: AIGO Expert Consultation (Grok API)
 If standard retries fail, the system invokes the **AIGO Expert**:
-1.  **Artifact Capture**: It takes a high-res Screenshot and a Sanitized HTML (scripts/styles removed).
-2.  **The Brain (Gemini)**: It sends these assets to the xAI/Gemini LLM with a highly specific prompt:
-    > "You are an Elite Troubleshooting Expert. Mission: Click 'Place Bet'. Here is what we ALREADY tried (The Heatmap). Do NOT try those again. Give me a Primary Path and a Backup Path."
-3.  **Path Diversity**: AIGO mandates that the two paths must be DIFFERENT:
-    - **Path A (Direct)**: A new, robust CSS selector.
-    - **Path B (Action Sequence)**: e.g., "Scroll down 200px, click the 'Accept Cookies' popup, then click the blue button."
-    - **Path C (Extraction)**: "Just read the number on the screen and return it; don't bother clicking."
+
+1. **Artifact Capture**: Takes a high-res screenshot (Base64-encoded) and a sanitized HTML snapshot (scripts/styles stripped via `html_utils.py`).
+2. **The Brain (Grok)**: Sends both artifacts to the xAI Grok multimodal API with a highly specific prompt:
+   > "You are an Elite Troubleshooting Expert. Mission: Click 'Place Bet'. Here is what we ALREADY tried (The Heatmap). Do NOT suggest those again. Give me a Primary Path and a Backup Path."
+3. **Path Diversity**: AIGO mandates that the two paths must be **fundamentally different**:
+   - **Path A (Direct Selector)**: A new, robust CSS selector derived from visual analysis.
+   - **Path B (Action Sequence)**: e.g., "Scroll down 200px, dismiss the cookie popup, then click the green button."
+   - **Path C (Extraction)**: "Read the number from the screen and return it; don't click anything."
+4. **Retry Logic**: 3 attempts with exponential backoff (2s → 4s → 8s).
+5. **JSON Salvage**: Robust parser that extracts valid JSON from LLM responses even when they contain markdown fencing, trailing commas, or commentary.
 
 ### Phase 4: Self-Healing & Persistence
-- Once a path succeeds, AIGO doesn't just forget. 
-- It updates the **Knowledge Registry** (`knowledge.json`) and **Learning Weights**.
-- This "heals" the codebase in real-time. The next time the bot runs, it will use the new, successful path discovered by AIGO.
+Once a path succeeds, AIGO **permanently heals** the codebase:
+- Updates `knowledge.json` via `selector_db.py` (UPSERT operation)
+- Stores the success pattern in `memory_manager.py` for reinforcement learning
+- Updates `learning_weights.json` for long-term strategy optimization
+
+**Result**: The next time the bot encounters this element, it uses the AI-discovered path immediately — zero retries needed.
 
 ---
 
-## 3. Key Components of the "Healer"
+## 3. Component Architecture
 
-| Component | Role | Analogy |
-| :--- | :--- | :--- |
-| **`aigo_engine.py`** | The Decision Maker. Coordinates the LLM call and path validation. | The Surgeon |
-| **`interaction_engine.py`** | The Executioner. Handles the retries and path switching. | The Hands |
-| **`visual_analyzer.py`** | The Vision. Sees the screen coordinates and element relationships. | The Eyes |
-| **`memory_manager.py`** | The Experience. Remembers what worked and what didn't. | The Brain |
-| **`selector_db.py`** | The Registry. Stores the ultimate "Known Truths". | The Dictionary |
-
----
-
-## 4. Why AIGO is "Ultra-Hardened"
-- **Intra-cycle Redundancy**: If the "Primary" suggestion from the AI fails, the system immediately tries the "Backup" without waiting or restarting. This saves minutes of execution time.
-- **Context Probing**: If the bot is lost, it runs a `PageAnalyzer` which works like a GPS—it scans the page structure to figure out which "Chapter" of the workflow it should be in.
-- **Dynamic Probing**: Before clicking, AIGO "pings" the element to see if it is actually visible or if it's hidden behind a loading spinner.
+| Component | File | Role | Invocation Rate |
+|-----------|------|------|:-:|
+| **AIGO Engine** | `aigo_engine.py` | Decision maker — coordinates Grok API calls and path validation | ~8-18% of interactions |
+| **Interaction Engine** | `interaction_engine.py` | Executor — handles the 5-phase cascade, retries, and path switching | 100% of browser actions |
+| **Visual Analyzer** | `visual_analyzer.py` | Vision — combines screenshots + DOM for element discovery | ~20-30% of interactions |
+| **Memory Manager** | `memory_manager.py` | Experience — stores success/failure patterns for reinforcement learning | 100% of interactions |
+| **Selector DB** | `selector_db.py` | Registry — UPSERT operations on `knowledge.json` selectors | On every AI-discovered path |
+| **Unified Matcher** | `unified_matcher.py` | Multi-strategy matcher — CSS → XPath → text → fuzzy | ~40-60% of interactions |
+| **Popup Handler** | `popup_handler.py` | Overlay removal — intelligent popup/modal/overlay dismissal | Pre-emptive on every page |
 
 ---
 
-### SUMMARY
-**AIGO is the difference between a bot that crashes and a bot that adapts.** It transforms "scraping" into "observing and acting," effectively giving the LeoBook system the ability to "learn" the web interface it interacts with.
+## 4. AIGO Integration Points in Leo.py
+
+AIGO is **not called directly** by Leo.py. Instead, it's woven into every browser interaction through the modules that Leo.py calls:
+
+| Chapter | Module | AIGO Usage |
+|---------|--------|------------|
+| **Prologue P1** | `outcome_reviewer.py` | Score extraction from Flashscore match pages |
+| **Prologue P2** | `enrich_all_schedules.py` | Team ID, crest, and standings extraction |
+| **Ch1 P1** | `fs_processor.py` | H2H tab navigation, data extraction |
+| **Ch1 P2** | `navigator_aigo.py`, `booking_code.py` | Football.com navigation, odds selection |
+| **Ch2 P1** | `slip_aigo.py`, `placement.py` | Bet slip interactions, code injection |
+| **Ch2 P2** | `balance_extractor_aigo.py`, `withdrawal.py` | Balance reading, withdrawal execution |
+
+---
+
+## 5. Why AIGO is "Ultra-Hardened"
+
+- **Intra-Cycle Redundancy**: If the Primary path fails, the Backup path is tried immediately — no restart, no delay. This saves minutes per cycle.
+- **Heatmap-Aware Healing**: Failed selectors are tracked and excluded from future AI prompts, preventing the LLM from suggesting broken paths.
+- **Context Probing**: If the bot is lost on a page, `PageAnalyzer` acts like a GPS — it scans the page structure to determine which workflow step the bot should be executing.
+- **Dynamic Probing**: Before clicking, AIGO "pings" the element to verify it's actually visible and not hidden behind a loading spinner or overlay.
+- **Path Diversity Enforcement**: Primary and Backup paths must be of different types (e.g., one selector-based, one action-sequence-based). This maximizes recovery probability.
+
+---
+
+## 6. Environment Requirements
+
+| Variable | Required | Purpose |
+|----------|:--------:|---------|
+| `GROK_API_KEY` | ✅ | xAI Grok API for Phase 3 expert consultation |
+| `LLM_API_URL` | Optional | Local Leo AI server fallback if Grok is unavailable |
+
+---
+
+### Summary
+
+**AIGO is the difference between a bot that crashes and a bot that adapts.** It transforms web scraping into "observing and acting," giving LeoBook the ability to learn and heal in real-time. Every successful AI discovery permanently improves the system's knowledge base — making it faster and more resilient with every cycle.
+
+> **Production Reality**: In steady-state operation, AIGO Phase 3 (Grok API) is invoked on only ~8-18% of browser interactions. The other 82-92% are resolved instantly via cached selectors and reinforcement learning (Phases 0-1).

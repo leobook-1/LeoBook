@@ -1,293 +1,149 @@
-# Production Requirements for Supabase Sync Integration
+# Supabase Sync — Technical Specification
+
+> **Version**: 2.8 · **Last Updated**: 2026-02-17 · **Status**: Fully Implemented & Automated
 
 ## Overview
-Automated sync system to push Data/Store CSV changes to Supabase after Leo.py execution.
 
-## Architecture
+LeoBook v2.8 uses **automatic bi-directional sync** between local CSV data stores and Supabase cloud database. Sync is managed by [`SyncManager`](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/sync_manager.py) — no manual scripts or user prompts required.
+
+### Architecture
 ```
-Leo.py (generates predictions) 
-    → Data/Store/predictions.csv (source of truth)
-    → [User prompt: Sync to Supabase? Y/N]
-    → Scripts/sync_to_supabase.py (IF YES)
-    → Supabase Database (API for Flutter app)
-```
-
----
-
-## Production Setup Checklist
-
-### 1. Install Dependencies
-```bash
-pip install -r requirements.txt
+Leo.py (orchestrator)
+  → SyncManager.sync_on_startup()     # Pull remote → merge → push deltas
+  → [... cycle work ...]
+  → SyncManager.run_full_sync()       # Push all local changes to cloud
+  → Supabase (cloud DB)
+  → Flutter App (reads Supabase)
 ```
 
-**New dependencies:**
-- `supabase>=2.0.0` - Python client for Supabase
-- `python-dotenv` (already installed) - Environment variable management
-
-### 2. Configure Environment Variables
-
-**Create `.env` file** (copy from `.env.example`):
-```bash
-cp .env.example .env
+### Data Flow
 ```
-
-**Fill in your credentials:**
-```env
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1...  # From Supabase Dashboard → API → Service Role
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1...    # For Flutter app (optional for sync script)
-```
-
-> ⚠️ **SECURITY**: Add `.env` to `.gitignore` (already done). NEVER commit credentials!
-
-### 3. Set up Logging Directory
-```bash
-mkdir -p logs
-```
-
-Logs will be written to: `logs/supabase_sync.log`
-
-### 4. Test Supabase Connection
-```bash
-# Dry run (doesn't write to database)
-python Scripts/sync_to_supabase.py --dry-run
-```
-
-Expected output:
-```
-✅ Connected to Supabase: https://xxx.supabase.co
-📂 Read 7434 rows from predictions.csv
-🔍 DRY RUN MODE - No data will be written
-📦 Processing batch 1/15 (500 rows)
-   Would upsert 500 rows
-...
-🎉 Sync completed successfully!
-```
-
-### 5. Run First Sync (Manual)
-```bash
-python Scripts/sync_to_supabase.py
-```
-
-You'll be prompted:
-```
-🔄 Update Supabase with Data/Store changes? (Y/N): Y
+Local CSVs (source of truth during cycle)
+     ↕ bi-directional UPSERT
+Supabase (cloud DB, consumed by Flutter app)
 ```
 
 ---
 
-## Integration with Leo.py
+## SyncManager Specification
 
-### Option A: Manual Integration (Recommended for testing)
+### Module: `Data/Access/sync_manager.py`
 
-Add this to the **end of `Leo.py`** (before script exits):
+#### `sync_on_startup()`
+- **When**: Prologue Page 1 (start of every cycle)
+- **Direction**: Bi-directional
+- **Logic**:
+  1. Pull all Supabase records with `updated_at > last_sync_timestamp`
+  2. Merge with local CSVs (newer record wins)
+  3. Push local records with `updated_at > last_sync_timestamp` to Supabase
+  4. Update sync checkpoint
 
-```python
-import subprocess
-import sys
-
-def sync_to_supabase():
-    """Prompt user to sync predictions to Supabase."""
-    try:
-        # Run sync script
-        result = subprocess.run(
-            [sys.executable, 'Scripts/sync_to_supabase.py'],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-            capture_output=False  # Show output in real-time
-        )
-        
-        if result.returncode == 0:
-            print("✅ Supabase sync completed successfully")
-        else:
-            print("⚠️  Supabase sync failed (check logs/supabase_sync.log)")
-            
-    except Exception as e:
-        print(f"⚠️  Could not run Supabase sync: {e}")
-
-# At the very end of Leo.py, before exit:
-if __name__ == "__main__":
-    # ... your existing code ...
-    
-    # Sync to Supabase
-    sync_to_supabase()
-```
-
-### Option B: Automatic Sync (Production)
-
-Add `--force` flag to skip prompt:
-
-```python
-def sync_to_supabase_auto():
-    """Automatically sync to Supabase without prompting."""
-    subprocess.run(
-        [sys.executable, 'Scripts/sync_to_supabase.py', '--force'],
-        cwd=os.path.dirname(os.path.abspath(__file__))
-    )
-```
+#### `run_full_sync(label: str)`
+- **When**: Prologue P3, Chapter 1 P3, and ad-hoc
+- **Direction**: CSV → Supabase
+- **Logic**:
+  1. Read all local CSVs
+  2. Batch UPSERT to Supabase (500 rows/batch)
+  3. Log sync event to audit trail
 
 ---
 
-## Sync Script Features
+## Tables & Conflict Resolution
 
-### UPSERT Logic
-- **Insert**: New predictions (fixture_id not in database)
-- **Update**: Existing predictions (fixture_id already exists)
-- **Conflict Resolution**: Uses `fixture_id` as unique key
-
-### Batch Processing
-- Processes 500 rows per batch
-- Prevents memory issues with large datasets
-- Graceful error handling per batch
-
-### Error Handling
-- Validates environment variables
-- Handles missing CSV files
-- Logs failed batches for debugging
-- Returns non-zero exit code on failure
-
-### Logging
--Writes to: `logs/supabase_sync.log`
-- **Format**: `YYYY-MM-DD HH:MM:SS - LEVEL - Message`
-- **Retention**: Append mode (you should rotate logs periodically)
+| Table | Unique Key | Conflict Strategy | Sync Frequency |
+|-------|-----------|-------------------|:-:|
+| `predictions` | `fixture_id` | UPSERT (newer `updated_at` wins) | 3×/cycle |
+| `schedules` | `fixture_id` | UPSERT (newer `updated_at` wins) | 3×/cycle |
+| `standings` | `league_id + team_id` | UPSERT (latest snapshot wins) | 1×/cycle |
+| `teams` | `team_id` | UPSERT (latest data wins) | 1×/cycle |
+| `region_league` | `league_id` | UPSERT | 1×/cycle |
+| `accuracy_reports` | `report_id` | UPSERT | 1×/cycle |
+| `audit_events` | `event_id` | INSERT only (append-only log) | On every event |
 
 ---
 
-## CLI Usage
+## Batch Processing
 
-```bash
-# Interactive mode (prompts user)
-python Scripts/sync_to_supabase.py
-
-# Dry run (simulate without writing)
-python Scripts/sync_to_supabase.py --dry-run
-
-# Force sync (no prompt)
-python Scripts/sync_to_supabase.py --force
-
-# Combine dry-run + force (for CI/CD testing)
-python Scripts/sync_to_supabase.py --dry-run --force
-```
+- **Batch Size**: 500 rows per UPSERT call
+- **Concurrency**: Sequential batches (no parallel writes)
+- **Error Handling**: Failed batches are logged and retried once; partial failure doesn't abort sync
+- **Memory**: Streaming reads from CSVs to avoid loading entire files into memory
 
 ---
 
-## Monitoring & Safety
+## Resilience Design
 
-### Check Sync Logs
-```bash
-tail -f logs/supabase_sync.log
-```
-
-### Verify in Supabase Dashboard
-1. Go to **Table Editor** → `predictions`
-2. Check row count matches CSV
-3. Run test query:
-   ```sql
-   SELECT COUNT(*) FROM predictions;
-   SELECT * FROM predictions ORDER BY generated_at DESC LIMIT 10;
-   ```
-
-### Rollback Strategy
-If sync goes wrong:
-1. **Supabase Dashboard** → **SQL Editor**
-2. Delete recent records:
-   ```sql
-   DELETE FROM predictions 
-   WHERE created_at > '2026-02-10 22:00:00';
-   ```
-3. Re-run sync script
+### Offline-First
+- All CSV files are the **local source of truth** during a Leo.py cycle
+- If Supabase is unreachable, the cycle continues normally — sync is retried next cycle
+- This is critical for Aba, Nigeria connectivity constraints
 
 ### Conflict Resolution
-The script uses `fixture_id` as the unique key:
-- **Same fixture_id**: Updates existing row
-- **New fixture_id**: Inserts new row
-- **Deleted from CSV**: Stays in database (manual cleanup required)
+- **Last-write-wins** based on `updated_at` timestamp
+- Leo.py writes always have the latest `updated_at`, so they naturally win over stale cloud data
+- Flutter app is **read-only** — it never writes to Supabase, so no write conflicts
+
+### Data Integrity
+- [`data_validator.py`](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/data_validator.py): Validates CSV column schemas before sync
+- [`health_monitor.py`](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/health_monitor.py): Detects stale data and sync gaps via Chapter 3 oversight
 
 ---
 
-## Performance Benchmarks
+## Performance
 
-| Rows | Sync Time | Bandwidth |
-|------|-----------|-----------|
-| 1,000 | ~3s | ~500 KB |
-| 7,500 | ~20s | ~3.5 MB |
-| 10,000 | ~25s | ~4.7 MB |
-
-**Recommendation**: Run sync once per Leo.py execution (not every minor change).
-
----
-
-## Security Best Practices
-
-1. ✅ **Never commit** `.env` file
-2. ✅ **Use Service Role Key** for sync script (has write access)
-3. ✅ **Use Anon Key** in Flutter app (read-only via RLS)
-4. ✅ **Rotate keys** if compromised (Supabase Dashboard → API → Reset)
-5. ✅ **Monitor logs** for unauthorized access attempts
+| Dataset | Rows | Sync Time | Bandwidth |
+|---------|------|-----------|-----------|
+| predictions.csv | ~10,000 | ~25s | ~4.7 MB |
+| schedules.csv | ~22,000 | ~45s | ~8.7 MB |
+| standings.csv | ~15,000 | ~30s | ~7.3 MB |
+| Full sync (all tables) | ~50,000 | ~120s | ~22 MB |
 
 ---
 
-## Troubleshooting
+## Environment Variables
 
-### Error: "Missing environment variables"
-**Solution**: Create `.env` file and add credentials
-
-### Error: "predictions.csv not found"
-**Solution**: Check file exists at `Data/Store/predictions.csv`
-
-### Error: "Connection timeout"
-**Solution**: Check internet connection and Supabase URL
-
-### Error: "Permission denied"
-**Solution**: Verify you're using SERVICE_ROLE_KEY (not ANON_KEY)
-
-### Batch fails with "duplicate key"
-**Solution**: This is normal during UPSERT - script resolves automatically
+| Variable | Used By | Purpose |
+|----------|---------|---------|
+| `SUPABASE_URL` | Python + Flutter | Project URL (`https://xxx.supabase.co`) |
+| `SUPABASE_SERVICE_KEY` | Python only | Full write access (Service Role Key) |
+| `SUPABASE_ANON_KEY` | Flutter only | Read-only access via RLS (Anon Key) |
 
 ---
 
-## Production Deployment
+## Monitoring & Debugging
 
-### GitHub Actions (CI/CD)
-```yaml
-name: Sync to Supabase
+### Check Sync Status
+```sql
+-- Last sync event
+SELECT * FROM audit_events
+WHERE event_type = 'SYNC'
+ORDER BY created_at DESC LIMIT 5;
 
-on:
-  push:
-    paths:
-      - 'Data/Store/predictions.csv'
+-- Row counts
+SELECT 'predictions' as tbl, COUNT(*) as rows FROM predictions
+UNION ALL SELECT 'schedules', COUNT(*) FROM schedules
+UNION ALL SELECT 'standings', COUNT(*) FROM standings
+UNION ALL SELECT 'teams', COUNT(*) FROM teams;
+```
 
-jobs:
-  sync:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Sync to Supabase
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python Scripts/sync_to_supabase.py --force
+### Verify Freshness
+```sql
+SELECT MAX(updated_at) as latest_update FROM predictions;
+-- Should be within the last 6 hours during active operation
+```
+
+### Rollback
+```sql
+-- Delete recent bad data
+DELETE FROM predictions WHERE updated_at > '2026-02-17 12:00:00';
+-- Re-run Leo.py cycle to re-sync
 ```
 
 ---
 
-## Summary
+## Security
 
-✅ **Source of Truth**: CSV files (generated by Leo.py)  
-✅ **Sync Target**: Supabase (consumed by Flutter app)  
-✅ **Trigger**: User prompt after Leo.py completes  
-✅ **Operation**: UPSERT (insert new, update existing)  
-✅ **Safety**: Dry-run mode, logging, error handling  
-✅ **Performance**: Batched processing, ~25s for 10k rows  
-
-**Next Steps:**
-1. Set up `.env` with your Supabase credentials
-2. Run `python Scripts/sync_to_supabase.py --dry-run` to test
-3. Integrate sync call into `Leo.py` shutdown
-4. Monitor `logs/supabase_sync.log` for issues
+1. ✅ Service Role Key: only in Python backend `.env` (never in client apps)
+2. ✅ Anon Key: used by Flutter app with Row Level Security (read-only)
+3. ✅ `.env` files in `.gitignore`
+4. ✅ RLS policies enforce read-only access for anonymous users

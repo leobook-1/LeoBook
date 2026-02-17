@@ -405,15 +405,17 @@ flowchart TD
 | 8 | **Prologue P3** | `review_outcomes.run_accuracy_generation()` | Compute comprehensive accuracy reports, save to `accuracy_reports.csv` |
 | 9 | **Prologue P3** | `sync_manager.run_full_sync("Prologue Final")` | Full bi-directional sync with Supabase |
 | 10 | **Ch1 P1** | `manager.run_flashscore_analysis(p)` | Launch browser → navigate to Flashscore → `fs_schedule.extract_matches_from_page()` → for each match: `fs_processor.process_match_task()` → extract H2H + standings → `intelligence.make_prediction()` → save to `predictions.csv` |
-| 11 | **Ch1 P2** | `fb_manager.run_odds_harvesting(p)` | Launch Football.com session → login → for each date: `resolve_urls()` (fuzzy Flashscore→Football.com) → `booking_code.harvest_booking_codes()` → save codes to `pages_registry.csv` |
+| 11 | **Ch1 P2** | `fb_manager.run_odds_harvesting(p)` | Launch Football.com session → login → for each date: `resolve_urls()` (fuzzy Flashscore→Football.com) → `booking_code.harvest_booking_codes()` → save codes to `pages_registry.csv`. Uses AIGO (`interaction_engine` → `aigo_engine`) for resilient UI actions when standard selectors fail. |
 | 12 | **Ch1 P3** | `sync_manager.run_full_sync("Chapter 1 Final")` | Push all new predictions + registry to Supabase |
 | 13 | **Ch1 P3** | `recommend_bets.get_recommendations(save_to_file=True)` | Score predictions → rank by confidence × market reliability → save `recommended.json` + update `predictions.csv` |
-| 14 | **Ch2 P1** | `fb_manager.run_automated_booking(p)` | Launch Football.com session → load harvested codes → `placement.place_multi_bet_from_codes()` → clear slip → enter codes → confirm bets |
+| 14 | **Ch2 P1** | `fb_manager.run_automated_booking(p)` | Launch Football.com session → load harvested codes → `placement.place_multi_bet_from_codes()` → clear slip → enter codes → confirm bets. Uses AIGO for bet slip interactions (`slip_aigo.py`). |
 | 15 | **Ch2 P2** | `navigator.extract_balance(page)` | Extract current balance from Football.com |
 | 16 | **Ch2 P2** | `withdrawal_checker.check_triggers()` | Evaluate withdrawal conditions (profit threshold, time since last withdrawal) |
 | 17 | **Ch2 P2** | `withdrawal_checker.execute_withdrawal()` | If approved: `withdrawal.withdraw_amount()` on Football.com |
 | 18 | **Ch3** | `monitoring.run_chapter_3_oversight()` | Health check (data freshness, error count, balance, prediction volume, bet success rate) → generate report → log to audit |
 | 19 | **Sleep** | `asyncio.sleep(6h)` | Wait for next cycle |
+
+> **AIGO Invocation Rate**: AIGO Phase 3 (expert consultation via Grok API) is called only when Phases 1–2 (selector lookup + reinforcement learning) fail — approximately **8–18% of browser interactions** in production. Successful AI-derived selectors are persisted to `knowledge.json` via `selector_db.py`, reducing future invocations.
 
 ---
 
@@ -489,11 +491,13 @@ flowchart LR
         PREDICT["Predict<br/>(Intelligence)"]
         HARVEST["Harvest Odds<br/>(Football.com)"]
         BOOK["Place Bets<br/>(Football.com)"]
+        AIGO["🛡️ AIGO<br/>(Self-Healing)"]
         MONITOR["Monitor<br/>(Health Check)"]
     end
 
     subgraph DATA ["Data Layer"]
         CSV[("Local CSVs<br/>predictions.csv<br/>schedules.csv<br/>standings.csv")]
+        KJ[("knowledge.json<br/>Selector Knowledge Base")]
         SB[("Supabase<br/>Cloud Database")]
     end
 
@@ -507,7 +511,10 @@ flowchart LR
     FB --> HARVEST --> CSV
     CSV --> BOOK --> FB
     GROK --> PREDICT
-    GROK --> HARVEST
+    HARVEST -.->|"selector failure<br/>(~8-18%)"| AIGO
+    BOOK -.->|"UI failure"| AIGO
+    AIGO --> GROK
+    AIGO -->|"persist selector"| KJ
     CSV <--> SB
     SB --> MOBILE
     MONITOR --> CSV

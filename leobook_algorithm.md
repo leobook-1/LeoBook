@@ -1,135 +1,153 @@
-# LeoBook v2.7 Algorithm & Codebase Reference
+# LeoBook v2.8 Algorithm & Codebase Reference
 
-This document serves as the **Source of Truth** for the LeoBook Autonomous Betting System. It provides a granular, step-by-step breakdown of the execution flow, mapped to specific files and functions.
+> **Version**: 2.8 · **Last Updated**: 2026-02-17 · **Architecture**: Clean Architecture (Orchestrator → Module → Data)
 
----
-
-## 🏗️ System Architecture
-
-The system operates in a continuous `while True` loop inside [Leo.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Leo.py), executing distinct chapters sequentially every 6 hours.
-
-For a high-level visual representation, see: [leobook_algorithm.mmd](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/leobook_algorithm.mmd)
-
-### Chapter 0: Accuracy Review & Registry Updater
-**Objective**: Observe past performance, update financial records, and adjust AI learning weights. Prediction accuracy reviewer and outcome updater.
-
-1.  **Singleton Protection**: [Leo.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Leo.py) uses a `leo.lock` file to prevent multiple instances from running simultaneously. This protects the Telegram Bot communication from `getUpdates` conflicts and ensures data integrity.
-2.  **System Initialization**:
-    - [Leo.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Leo.py): `main()` calls `init_csvs()`.
-    - [db_helpers.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/db_helpers.py): `init_csvs()` ensures all storage files and headers exist.
-    - [Leo.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Leo.py): Starts the non-blocking Telegram listener task via [telegram_bridge.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/System/telegram_bridge.py).
-    - [lifecycle.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/System/lifecycle.py): `setup_terminal_logging()` initializes process logs.
-    - [telegram_bridge.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/System/telegram_bridge.py): `start_telegram_listener()` launches the interactive bot.
-
-2.  **Outcome Processing**:
-    - [review_outcomes.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/review_outcomes.py): `run_review_process()` orchestrates the chapter.
-    - [outcome_reviewer.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/outcome_reviewer.py):
-        - `get_predictions_to_review()`: Filters `predictions.csv` for past matches needing review.
-        - `process_review_task()`: Worker function (concurrency 5) that navigating to Flashscore via Playwright.
-        - `get_final_score()`: Extracts the score from the match page or local `schedules.csv`.
-        - `save_single_outcome()`: Updates `predictions.csv` with `actual_score` and `status: reviewed`.
-    - [prediction_evaluator.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/prediction_evaluator.py): `evaluate_prediction()` resolves the bet outcome (WIN/LOSS).
-    - [prediction_accuracy.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/prediction_accuracy.py): `print_accuracy_report()` generates the financial and model performance report.
-    - [model.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/model.py): `update_learning_weights()` triggers the [LearningEngine](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/learning_engine.py) to rotate weights.
+This document maps the **execution flow** of [Leo.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Leo.py) to specific files and functions. For the complete file inventory, see [LeoBook_Technical_Master_Report.md](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/LeoBook_Technical_Master_Report.md).
 
 ---
 
-### **Chapter 1A: Schedules & Info Extraction**
-**Objective**: Harvest upcoming fixtures and metadata (historical data and stats).
+## System Architecture
 
-1.  **Schedule Harvesting**:
-    - [manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/Flashscore/manager.py): `run_flashscore_analysis()` navigates to the Flashscore football page.
-    - [fs_schedule.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/Flashscore/fs_schedule.py): `extract_matches_from_page()` scrapes fixture metadata (IDs, URLs, Teams).
+Leo.py is a **pure orchestrator** (275 lines, zero business logic). It runs an infinite `while True` loop, executing 4 phases sequentially every `LEO_CYCLE_WAIT_HOURS` (default 6h).
 
-2.  **Modular Extraction**:
-    - [fs_processor.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/Flashscore/fs_processor.py): `process_match_task()` concurrent worker (concurrency 5).
-    - [navigator.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/Flashscore/navigator.py): `navigate_to_match()` and `activate_h2h_tab()`/`activate_standings_tab()` handles UI switching.
-    - [extractor.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/Flashscore/extractor.py): Calls specialized extractors:
-        - [h2h_extractor.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Browser/Extractors/h2h_extractor.py): `extract_h2h_data()` parses match history.
-        - [standings_extractor.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Browser/Extractors/standings_extractor.py): `extract_standings_data()` parses league tables.
-
-3.  **Chapter 1B: Data Analysis & Prediction**
-**Objective**: Execute AI models and rules to generate betting selections.
-    - [rule_engine.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/rule_engine.py): `RuleEngine.analyze()` coordinates sub-processes:
-        - [ml_model.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/ml_model.py): `MLModel.predict()` evaluates patterns via trained models.
-        - [goal_predictor.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/goal_predictor.py): `predict_goals_distribution()` calculates Poisson probabilities.
-        - [tag_generator.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/tag_generator.py): Generates labels like `FORM_S2+` (Score 2+ often).
-    - [betting_markets.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/betting_markets.py): `select_best_market()` chooses the safest market (conservative bias).
-    - [db_helpers.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/db_helpers.py): `save_prediction()` persists the final choice to `predictions.csv`.
+```
+Leo.py (Orchestrator)
+├── Prologue: Cloud Sync → Outcome Review → Enrichment → Accuracy → Final Sync
+├── Chapter 1: Flashscore Extraction → AI Prediction → Odds Harvesting → Recommendations
+├── Chapter 2: Automated Bet Placement → Withdrawal Management
+└── Chapter 3: Chief Engineer Oversight & Health Check
+```
 
 ---
 
-### **Chapter 1C: Odds Discovery & Market Analysis**
-**Objective**: Extraction of booking site match outcome bets and odds for the predicted matches.
+## Prologue: Enrichment & Cloud Sync
 
-1.  **Preparation**:
-    - [fb_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/fb_manager.py): `run_football_com_booking()` orchestrates the Chapter 1C and 2A logic.
-    - [fb_session.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/fb_session.py): `launch_browser_with_retry()` initializes the anti-detect session.
-    - [navigator.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/navigator.py): `load_or_create_session()` and `extract_balance()` validate the account state.
-    - **Navigation Robustness**: Implements a mandatory **Scroll-Before-Click** strategy and pre-emptive popup dismissal before critical page transitions.
+**Objective**: Sync with cloud, review past outcomes, enrich metadata, compute accuracy.
 
-2. ### **Chapter 2A: Automated Booking**
-**Objective**: Single and multiple bet automated booking and bets management.
-**Objective**: Connect prediction data to bookmaker URLs and extract individual booking codes.
+### Page 1: Cloud Handshake & Review
 
-- **Orchestrator**: [fb_url_resolver.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/fb_url_resolver.py)
-- **Logic**:
-  - **Registry Check**: Checks `fb_matches.csv` for the target date before crawling.
-  - **Match Matching (Direct)**: Re-uses URLs for already-mapped `fixture_id`s in the registry.
-  - **Match Matching (AI Batch)**: Runs **Improved AI Batch Prompt** against cached matches.
-  - **Improved Prompt Rules**:
-    - **Rule 1**: Strict team matching (ignore minor suffixes).
-    - **Rule 2**: Time must be within **1 hour** (discard if started/finished/postponed).
-    - **Rule 3**: Discard if league differs significantly.
-  - **Action**: Extracts sharing booking codes via [booking_code.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/booking_code.py).
-    - [booking_code.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/booking_code.py): `harvest_booking_codes()`:
-        - **Navigation**: Visits match URL, scrolls to outcome.
-        - **Extraction**: Clicks outcome -> Opens slip -> Extracts code -> Saves to `fb_matches.csv`.
-        - **Clearing**: Calls `force_clear_slip()` after *each* extraction to keep the UI clean.
+1. [sync_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/sync_manager.py): `SyncManager.sync_on_startup()` — bi-directional Supabase ↔ CSV sync
+2. [review_outcomes.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/review_outcomes.py): `run_review_process()` — orchestrates outcome review
+   - [outcome_reviewer.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/outcome_reviewer.py): `get_predictions_to_review()` → `process_review_task()` (concurrent, 5 workers) → navigates to Flashscore → extracts final score → marks W/L/D
+   - [prediction_evaluator.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/prediction_evaluator.py): `evaluate_prediction()` — resolves bet outcome
+3. [prediction_accuracy.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/prediction_accuracy.py): `print_accuracy_report()` — generates performance report
 
-3. ### **Chapter 2B: Funds & Withdrawal**
-**Objective**: Monitor bankroll and execute payouts based on profit rules (funds management).
-**Objective**: Inject all harvested codes and place a single combined accumulator bet.
-- **Action**: [placement.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/placement.py): `place_multi_bet_from_codes()`:
-    - **Injection**: Loops through harvested codes for the date and injects them via the bookmaker's "m-m" URL.
-    - **Verification**: Confirms slip count matches.
-    - **Staking**: Calculates **Fractional Kelly Stake** based on total balance.
-    - **Placement**: Place & Confirm.
-    - **Logging**: Updates `predictions.csv` to `status: booked`.
+### Page 2: Metadata Enrichment
+
+1. [enrich_all_schedules.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Scripts/enrich_all_schedules.py): `enrich_all_schedules(extract_standings=True)` — visits all match URLs in `schedules.csv` (22k+), extracts:
+   - Team IDs, crests, URLs → `teams.csv`
+   - Region ↔ league mappings → `region_league.csv`
+   - League standings → `standings.csv`
+   - Missing datetime, scores → `schedules.csv` backfill
+
+### Page 3: Accuracy & Final Sync
+
+1. [review_outcomes.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/review_outcomes.py): `run_accuracy_generation()` — compute accuracy reports → `accuracy_reports.csv`
+2. [sync_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/sync_manager.py): `run_full_sync("Prologue Final")` — push all local changes to Supabase
 
 ---
 
-### **Chapter 3: Chief Engineer Oversight**
-**Objective**: Live monitoring system overseeing all chapters (0 to 2B) in real-time.
+## Chapter 1: Discovery & Prediction
 
-1.  **Bankroll Monitoring**:
-    - [Leo.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Leo.py): Extracts post-booking balance.
-    - [withdrawal_checker.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/System/withdrawal_checker.py): `check_triggers()` evaluates if a payout is due.
+**Objective**: Extract today's matches, generate AI predictions, harvest odds, generate recommendations.
 
-2.  **Payout Execution**:
-    - [withdrawal.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/withdrawal.py): `check_and_perform_withdrawal()`:
-        - Enforces 48h cooldown.
-        - Calculates amount (30% Balance / 50% Last Win caps).
-        - Enforces ₦5,000 baseline floor.
-        - Executes `_execute_withdrawal_flow()` (PIN entry, confirmation, verification).
-        - Logs success to `withdrawals.csv`.
+### Page 1: Flashscore Extraction & AI Prediction
+
+1. [manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/Flashscore/manager.py): `run_flashscore_analysis()` — launches browser, navigates to Flashscore
+2. [fs_schedule.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/Flashscore/fs_schedule.py): `extract_matches_from_page()` — scrapes today's fixtures (IDs, URLs, teams, times)
+3. [fs_processor.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/Flashscore/fs_processor.py): `process_match_task()` — concurrent worker (5 workers) per match:
+   - Navigates to match page
+   - [h2h_extractor.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Browser/Extractors/h2h_extractor.py): `extract_h2h_data()` — parses match history
+   - [standings_extractor.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Browser/Extractors/standings_extractor.py): `extract_standings_data()` — parses league tables
+4. [intelligence.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/intelligence.py): `make_prediction()` — orchestrates AI prediction:
+   - [ml_model.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/ml_model.py): `MLModel.predict()` — RandomForest/XGBoost pattern matching
+   - [goal_predictor.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/goal_predictor.py): `predict_goals_distribution()` — Poisson probability calculation
+   - [rule_engine.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/rule_engine.py): `RuleEngine.analyze()` — applies user-defined rules
+   - [tag_generator.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/tag_generator.py): generates labels (`HIGH_CONFIDENCE`, `UPSET_ALERT`, `FORM_S2+`)
+   - [betting_markets.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/betting_markets.py): `select_best_market()` — chooses optimal market (1X2, O/U, BTTS, etc.)
+5. [db_helpers.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/db_helpers.py): `save_prediction()` → `predictions.csv`
+
+### Page 2: Odds Harvesting
+
+1. [fb_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/fb_manager.py): `run_odds_harvesting()` — launches Football.com session
+2. [fb_session.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/fb_session.py): `launch_browser_with_retry()` — persistent auth session
+3. [navigator.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/navigator.py): `load_or_create_session()`, `extract_balance()` — validates account state
+4. [fb_url_resolver.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/fb_url_resolver.py): `resolve_urls()` — fuzzy-matches Flashscore → Football.com URLs
+   - [matcher.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/matcher.py): Team name fuzzy matching (Levenshtein + AI batch prompt)
+5. [booking_code.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/booking_code.py): `harvest_booking_codes()` — visits each match, clicks outcome, extracts booking code, clears slip
+6. Uses **AIGO** (`interaction_engine` → `aigo_engine`) for resilient UI actions when selectors fail
+
+### Page 3: Final Sync & Recommendations
+
+1. [sync_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/sync_manager.py): `run_full_sync("Chapter 1 Final")` — push predictions to Supabase
+2. [recommend_bets.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Scripts/recommend_bets.py): `get_recommendations(save_to_file=True)` — ranks predictions by confidence × market reliability → saves `recommended.json` + updates `predictions.csv`
 
 ---
 
-## 🔒 Self-Healing & Resilience Layer
+## Chapter 2: Automated Booking & Funds
 
-This layer operates globally across all chapters to ensure the system never stops due to UI changes.
+**Objective**: Place bets from harvested codes and manage bankroll.
 
-| Component | Responsibility | Key Hook |
-| :--- | :--- | :--- |
-| **AIGO Engine** | Ultra-hardened healing. | [aigo_engine.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/aigo_engine.py): `invoke_aigo()` |
-| **Interaction Engine** | Multi-path execution. | [interaction_engine.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/interaction_engine.py): `execute_smart_action()` |
-| **Selector Manager** | Advanced retrieval. | [selector_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/selector_manager.py): `get_selector_strict()` |
-| **Visual Analyzer** | Deep DOM discovery. | [visual_analyzer.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/visual_analyzer.py): `analyze_page_and_update_selectors()` |
-| **Memory Manager** | Pattern reinforcement. | [memory_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/memory_manager.py): `store_memory()` |
-| **Popup Handler** | Overlay removal. | [popup_handler.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/popup_handler.py): `fb_universal_popup_dismissal()` |
+### Page 1: Automated Booking
+
+1. [fb_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/fb_manager.py): `run_automated_booking()` — launches Football.com session
+2. [placement.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/placement.py): `place_multi_bet_from_codes()`:
+   - Loops through harvested codes for the date
+   - Injects codes via the bookmaker's "m-m" URL
+   - Verifies slip count matches expected
+   - Calculates **Fractional Kelly Stake** based on total balance (min ₦100, max 50% balance)
+   - Places & confirms bet
+   - Updates `predictions.csv` to `status: booked`
+3. Uses **AIGO** for bet slip interactions (`slip_aigo.py`)
+
+### Page 2: Funds & Withdrawal
+
+1. [navigator.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/navigator.py): `extract_balance()` — extracts post-booking balance
+2. [withdrawal_checker.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/System/withdrawal_checker.py): `check_triggers()` — evaluates withdrawal conditions (profit threshold, time since last)
+3. [withdrawal_checker.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/System/withdrawal_checker.py): `propose_withdrawal()` → `check_withdrawal_approval()` → `execute_withdrawal()`
+4. [withdrawal.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/FootballCom/booker/withdrawal.py): `withdraw_amount()`:
+   - Enforces ₦5,000 bankroll floor
+   - Executes withdrawal flow (PIN entry, confirmation, verification)
+   - Logs to audit trail
 
 ---
 
-**Chief Engineer**: Emenike Chinenye James  
-**Source of Truth**: Refactored Clean Architecture (v2.7)
+## Chapter 3: Chief Engineer Oversight
+
+**Objective**: System health monitoring and reporting.
+
+1. [monitoring.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/System/monitoring.py): `run_chapter_3_oversight()`:
+   - `perform_health_check()` — checks:
+     - Data store integrity (`predictions.csv` freshness)
+     - Error count this cycle
+     - Account balance status
+     - Prediction volume (≥5 expected daily)
+     - Bet placement success rate
+   - `generate_oversight_report()` — formats report with cycle count, uptime, balance, health status
+   - Logs `OVERSIGHT_REPORT` event to Supabase via `log_audit_event()`
+
+---
+
+## Self-Healing & Resilience Layer (AIGO v5.0)
+
+This layer operates **globally across all chapters**. See [AIGO_Learning_Guide.md](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/AIGO_Learning_Guide.md) for the full 5-phase pipeline.
+
+| Component | File | Key Function |
+|-----------|------|-------------|
+| **AIGO Engine** | [aigo_engine.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/aigo_engine.py) | `invoke_aigo()` — Grok API expert consultation |
+| **Interaction Engine** | [interaction_engine.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/interaction_engine.py) | `execute_smart_action()` — 5-phase cascade executor |
+| **Selector Manager** | [selector_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/selector_manager.py) | `get_selector_strict()` — AI-powered selector retrieval |
+| **Visual Analyzer** | [visual_analyzer.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/visual_analyzer.py) | `analyze_page_and_update_selectors()` — screenshot + DOM analysis |
+| **Memory Manager** | [memory_manager.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/memory_manager.py) | `store_memory()` — reinforcement learning patterns |
+| **Popup Handler** | [popup_handler.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Core/Intelligence/popup_handler.py) | `fb_universal_popup_dismissal()` — overlay removal |
+
+---
+
+## Supported Betting Markets
+
+1. 1X2 | 2. Double Chance | 3. Draw No Bet | 4. BTTS | 5. Over/Under | 6. Goal Ranges | 7. Correct Score | 8. Clean Sheet | 9. Asian Handicap | 10. Combo Bets | 11. Team O/U
+
+---
+
+**Chief Engineer**: Emenike Chinenye James
+**Source of Truth**: Refactored Clean Architecture (v2.8)
