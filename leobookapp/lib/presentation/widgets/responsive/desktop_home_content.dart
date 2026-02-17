@@ -3,11 +3,10 @@ import 'top_predictions_grid.dart';
 import 'category_bar.dart';
 import 'accuracy_report_card.dart';
 import 'top_odds_list.dart';
-import 'side_ruler.dart';
 import '../../../logic/cubit/home_cubit.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/match_sorter.dart';
-import '../match_card.dart';
+import 'package:leobookapp/presentation/widgets/match_card.dart';
 import '../footnote_section.dart';
 import 'package:leobookapp/data/models/match_model.dart';
 
@@ -29,6 +28,9 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late ScrollController _scrollController;
+  final GlobalKey _tabBarKey = GlobalKey();
+  final GlobalKey _footerKey = GlobalKey();
+  final Map<String, GlobalKey> _sectionKeys = {};
   int _visibleMatchCount = 12;
 
   // Match counts for tab labels
@@ -42,7 +44,6 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_handleTabChange);
     _scrollController = ScrollController();
-    _scrollController.addListener(() => setState(() {}));
     _computeCounts();
   }
 
@@ -92,8 +93,20 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
         CustomScrollView(
           controller: _scrollController,
           slivers: [
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _PinnedHeaderDelegate(
+                height: 92,
+                child: Container(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  alignment: Alignment.centerLeft,
+                  child: const CategoryBar(),
+                ),
+              ),
+            ),
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+              padding: const EdgeInsets.fromLTRB(40, 0, 40, 32),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   const TopPredictionsGrid(),
@@ -107,20 +120,10 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
             ),
             SliverPersistentHeader(
               pinned: true,
-              delegate: _StickyHeaderDelegate(
-                height: 92,
-                child: Container(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 40),
-                  child: const CategoryBar(),
-                ),
-              ),
-            ),
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _StickyHeaderDelegate(
+              delegate: _PinnedHeaderDelegate(
                 height: 50,
                 child: Container(
+                  key: _tabBarKey,
                   color: Theme.of(context).scaffoldBackgroundColor,
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   alignment: Alignment.centerLeft,
@@ -153,43 +156,10 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
               ),
             ),
             // Footer
-            const SliverToBoxAdapter(
-              child: FootnoteSection(),
+            SliverToBoxAdapter(
+              child: FootnoteSection(key: _footerKey),
             ),
           ],
-        ),
-        // Sticky Side Ruler
-        Positioned(
-          top: 150, // Positioned below the typical header area
-          right: 20,
-          bottom: 100, // Leave space for footer
-          width: 36,
-          child: Builder(
-            builder: (context) {
-              final index = _tabController.index;
-              MatchTabType type;
-              switch (index) {
-                case 1:
-                  type = MatchTabType.finished;
-                  break;
-                case 2:
-                  type = MatchTabType.scheduled;
-                  break;
-                default:
-                  type = MatchTabType.all;
-              }
-
-              // Only show if we've scrolled past the top sections
-              final showRuler = _scrollController.hasClients &&
-                  _scrollController.offset > 400;
-
-              if (!showRuler) return const SizedBox.shrink();
-
-              return Center(
-                child: _buildSideRuler(type) ?? const SizedBox.shrink(),
-              );
-            },
-          ),
         ),
       ],
     );
@@ -235,6 +205,8 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
       );
     }
 
+    // We clear keys only if the list changed significantly, but for simplicity
+    // let's ensure we have a key for every title we encounter.
     final List<Widget> children = [];
     List<MatchModel> currentGroupMatches = [];
 
@@ -242,17 +214,30 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
       if (currentGroupMatches.isNotEmpty) {
         final groupSnapshot = List<MatchModel>.from(currentGroupMatches);
         children.add(
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: widget.isSidebarExpanded ? 3 : 4,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 20,
-              mainAxisExtent: 350,
-            ),
-            itemCount: groupSnapshot.length,
-            itemBuilder: (context, idx) => MatchCard(match: groupSnapshot[idx]),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = widget.isSidebarExpanded ? 3 : 4;
+              const spacing = 20.0;
+              final itemWidth =
+                  (constraints.maxWidth - (spacing * (crossAxisCount - 1))) /
+                      crossAxisCount;
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: groupSnapshot
+                    .map(
+                      (m) => SizedBox(
+                        width: itemWidth,
+                        child: MatchCard(
+                          match: m,
+                          showLeagueHeader: type != MatchTabType.all,
+                        ),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
           ),
         );
         children.add(const SizedBox(height: 32));
@@ -263,7 +248,8 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
     for (final item in items) {
       if (item is MatchGroupHeader) {
         flushGroup();
-        children.add(_buildSectionHeader(item.title));
+        final key = _sectionKeys.putIfAbsent(item.title, () => GlobalKey());
+        children.add(_buildSectionHeader(item.title, key));
       } else if (item is MatchModel) {
         currentGroupMatches.add(item);
       }
@@ -276,8 +262,9 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, Key? key) {
     return Padding(
+      key: key,
       padding: const EdgeInsets.only(bottom: 16, top: 24),
       child: Row(
         children: [
@@ -310,52 +297,13 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
       ),
     );
   }
-
-  // ---------- Side Ruler ----------
-
-  Widget? _buildSideRuler(MatchTabType type) {
-    List<String> labels;
-    switch (type) {
-      case MatchTabType.all:
-        final leagueNames = widget.state.filteredMatches
-            .map((m) => m.league ?? 'Other')
-            .toSet()
-            .toList()
-          ..sort();
-        labels = SideRuler.alphabeticalLabels(leagueNames);
-        break;
-      case MatchTabType.finished:
-        labels = SideRuler.finishedTimeLabels();
-        break;
-      case MatchTabType.scheduled:
-        labels = SideRuler.scheduledTimeLabels();
-        break;
-    }
-
-    if (labels.isEmpty) return null;
-
-    return SideRuler(
-      labels: labels,
-      onLabelTapped: (idx) => _scrollToSection(idx, labels[idx], type),
-    );
-  }
-
-  void _scrollToSection(int index, String label, MatchTabType type) {
-    // Basic jumping logic
-    final targetOffset = 800.0 + (index * 300.0);
-    _scrollController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeInOut,
-    );
-  }
 }
 
-class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
+class _PinnedHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Widget child;
   final double height;
 
-  _StickyHeaderDelegate({required this.child, required this.height});
+  _PinnedHeaderDelegate({required this.child, required this.height});
 
   @override
   double get minExtent => height;
@@ -373,6 +321,7 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  bool shouldRebuild(_StickyHeaderDelegate oldDelegate) =>
-      oldDelegate.height != height || oldDelegate.child != child;
+  bool shouldRebuild(_PinnedHeaderDelegate oldDelegate) {
+    return oldDelegate.height != height || oldDelegate.child != child;
+  }
 }

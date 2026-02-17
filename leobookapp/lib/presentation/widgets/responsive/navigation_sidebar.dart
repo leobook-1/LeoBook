@@ -17,66 +17,69 @@ class NavigationSideBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
+    return AnimatedSize(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOutCubic,
-      width: isExpanded ? 256 : 72,
-      height: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceDark,
-        border: Border(right: BorderSide(color: Colors.white10)),
-      ),
-      child: SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints:
-              BoxConstraints(minHeight: MediaQuery.of(context).size.height),
-          child: IntrinsicHeight(
-            child: Column(
-              children: [
-                _buildLogo(),
-                const SizedBox(height: 32),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Column(
-                      children: [
-                        _NavItem(
-                          icon: Icons.home_rounded,
-                          label: "HOME",
-                          isActive: currentIndex == 0,
-                          isExpanded: isExpanded,
-                          onTap: () => onIndexChanged(0),
-                        ),
-                        _NavItem(
-                          icon: Icons.gavel_rounded,
-                          label: "RULES",
-                          isActive: currentIndex == 1,
-                          isExpanded: isExpanded,
-                          onTap: () => onIndexChanged(1),
-                        ),
-                        _NavItem(
-                          icon: Icons.emoji_events_rounded,
-                          label: "TOP",
-                          isActive: currentIndex == 2,
-                          isExpanded: isExpanded,
-                          onTap: () => onIndexChanged(2),
-                        ),
-                        _NavItem(
-                          icon: Icons.person_rounded,
-                          label: "PROFILE",
-                          isActive: currentIndex == 3,
-                          isExpanded: isExpanded,
-                          onTap: () => onIndexChanged(3),
-                        ),
-                      ],
+      child: IntrinsicWidth(
+        child: Container(
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            color: AppColors.surfaceDark,
+            border: Border(right: BorderSide(color: Colors.white10)),
+          ),
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints:
+                  BoxConstraints(minHeight: MediaQuery.of(context).size.height),
+              child: IntrinsicHeight(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildLogo(),
+                    const SizedBox(height: 32),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _NavItem(
+                            icon: Icons.home_rounded,
+                            label: "HOME",
+                            isActive: currentIndex == 0,
+                            isExpanded: isExpanded,
+                            onTap: () => onIndexChanged(0),
+                          ),
+                          _NavItem(
+                            icon: Icons.gavel_rounded,
+                            label: "RULES",
+                            isActive: currentIndex == 1,
+                            isExpanded: isExpanded,
+                            onTap: () => onIndexChanged(1),
+                          ),
+                          _NavItem(
+                            icon: Icons.emoji_events_rounded,
+                            label: "TOP",
+                            isActive: currentIndex == 2,
+                            isExpanded: isExpanded,
+                            onTap: () => onIndexChanged(2),
+                          ),
+                          _NavItem(
+                            icon: Icons.person_rounded,
+                            label: "PROFILE",
+                            isActive: currentIndex == 3,
+                            isExpanded: isExpanded,
+                            onTap: () => onIndexChanged(3),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                    const Spacer(),
+                    if (isExpanded) _buildProCard(),
+                    _buildToggleBtn(),
+                    const SizedBox(height: 16),
+                  ],
                 ),
-                _buildToggleBtn(),
-                const SizedBox(height: 16),
-                if (isExpanded) _buildProCard(),
-                const SizedBox(height: 16),
-              ],
+              ),
             ),
           ),
         ),
@@ -99,31 +102,34 @@ class NavigationSideBar extends StatelessWidget {
   Widget _buildLogo() {
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: isExpanded ? 16.0 : 8.0,
+        horizontal: isExpanded ? 16.0 : 4.0,
         vertical: isExpanded ? 24.0 : 12.0,
       ),
-      child: Row(
-        mainAxisAlignment:
-            isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(8),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: isExpanded ? Alignment.centerLeft : Alignment.center,
+        child: Row(
+          mainAxisAlignment:
+              isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+          mainAxisSize: isExpanded ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(isExpanded ? 8 : 6),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.analytics_rounded,
+                color: Colors.white,
+                size: isExpanded ? 24 : 18,
+              ),
             ),
-            child: const Icon(
-              Icons.analytics_rounded,
-              color: Colors.white,
-              size: 24,
-            ),
-          ),
-          if (isExpanded) ...[
-            const SizedBox(width: 12),
-            const Flexible(
-              child: Text(
+            if (isExpanded) ...[
+              const SizedBox(width: 8),
+              Text(
                 "LEOBOOK",
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
@@ -131,10 +137,11 @@ class NavigationSideBar extends StatelessWidget {
                   letterSpacing: -1,
                 ),
                 overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -162,19 +169,24 @@ class NavigationSideBar extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "PRO MEMBER",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.successGreen,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "PRO MEMBER",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.successGreen,
+                    ),
                   ),
-                ),
-                Icon(Icons.verified, color: AppColors.warning, size: 16),
-              ],
+                  const SizedBox(width: 8),
+                  Icon(Icons.verified, color: AppColors.warning, size: 16),
+                ],
+              ),
             ),
           ],
         ),
@@ -218,7 +230,7 @@ class _NavItemState extends State<_NavItem> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             padding: EdgeInsets.symmetric(
-              horizontal: widget.isExpanded ? 16 : 0,
+              horizontal: widget.isExpanded ? 16 : 12,
               vertical: 12,
             ),
             decoration: BoxDecoration(
@@ -234,29 +246,34 @@ class _NavItemState extends State<_NavItem> {
                     : Colors.transparent,
               ),
             ),
-            child: Row(
-              mainAxisAlignment: widget.isExpanded
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.center,
-              children: [
-                Icon(
-                  widget.icon,
-                  color: widget.isActive ? AppColors.primary : Colors.white54,
-                  size: 20,
-                ),
-                if (widget.isExpanded) ...[
-                  const SizedBox(width: 12),
-                  Text(
-                    widget.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: widget.isActive ? Colors.white : Colors.white54,
-                      letterSpacing: 1.0,
-                    ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment:
+                  widget.isExpanded ? Alignment.centerLeft : Alignment.center,
+              child: Row(
+                mainAxisAlignment: widget.isExpanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    widget.icon,
+                    color: widget.isActive ? AppColors.primary : Colors.white54,
+                    size: 20,
                   ),
+                  if (widget.isExpanded) ...[
+                    const SizedBox(width: 12),
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: widget.isActive ? Colors.white : Colors.white54,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

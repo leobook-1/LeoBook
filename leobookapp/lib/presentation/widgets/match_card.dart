@@ -12,7 +12,13 @@ import 'package:leobookapp/core/widgets/glass_container.dart';
 class MatchCard extends StatelessWidget {
   final MatchModel match;
   final bool showLiveBadge;
-  const MatchCard({super.key, required this.match, this.showLiveBadge = true});
+  final bool showLeagueHeader;
+  const MatchCard({
+    super.key,
+    required this.match,
+    this.showLiveBadge = true,
+    this.showLeagueHeader = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -52,92 +58,110 @@ class MatchCard extends StatelessWidget {
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LeagueScreen(
-                        leagueId: match.league ?? "SOCCER",
-                        leagueName: match.league ?? "SOCCER",
-                      ),
-                    ),
-                  );
-                },
-                child: Column(
-                  children: [
-                    // Region + Flag Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (match.regionFlagUrl != null &&
-                            match.regionFlagUrl!.isNotEmpty)
-                          CachedNetworkImage(
-                            imageUrl: match.regionFlagUrl!,
-                            width: 14,
-                            height: 10,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => Icon(
-                              Icons.public,
-                              size: 12,
-                              color: AppColors.textGrey.withValues(alpha: 0.8),
-                            ),
-                            errorWidget: (_, __, ___) => Icon(
-                              Icons.public,
-                              size: 12,
-                              color: AppColors.textGrey.withValues(alpha: 0.8),
-                            ),
-                          )
-                        else
-                          Icon(
-                            Icons.public,
-                            size: 12,
-                            color: AppColors.textGrey.withValues(alpha: 0.8),
-                          ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            region.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textGrey.withValues(alpha: 0.8),
-                              letterSpacing: 1.2,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+              if (showLeagueHeader)
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => LeagueScreen(
+                          leagueId: match.league ?? "SOCCER",
+                          leagueName: match.league ?? "SOCCER",
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    // League Name
-                    Text(
-                      leagueName.toUpperCase(),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white, // Pop out league name
-                        letterSpacing: 0.5,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    // Date & Time
-                    Text(
-                      "${match.date} • ${match.time}${match.displayStatus.isEmpty ? '' : ' • ${match.displayStatus}'}",
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: match.isLive
-                            ? AppColors.liveRed
-                            : AppColors.textGrey,
+                    );
+                  },
+                  child: Column(
+                    children: [
+                      // Region + Flag Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (match.regionFlagUrl != null &&
+                              match.regionFlagUrl!.isNotEmpty)
+                            CachedNetworkImage(
+                              imageUrl: match.regionFlagUrl!,
+                              width: 14,
+                              height: 10,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Icon(
+                                Icons.public,
+                                size: 12,
+                                color:
+                                    AppColors.textGrey.withValues(alpha: 0.8),
+                              ),
+                              errorWidget: (_, __, ___) => Icon(
+                                Icons.public,
+                                size: 12,
+                                color:
+                                    AppColors.textGrey.withValues(alpha: 0.8),
+                              ),
+                            )
+                          else
+                            Icon(
+                              Icons.public,
+                              size: 12,
+                              color: AppColors.textGrey.withValues(alpha: 0.8),
+                            ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              region.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color:
+                                    AppColors.textGrey.withValues(alpha: 0.8),
+                                letterSpacing: 1.2,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      // League Name
+                      Text(
+                        leagueName.toUpperCase(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white, // Pop out league name
+                          letterSpacing: 0.5,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      // Date & Time
+                      Text(
+                        "${match.date} • ${match.time}${match.displayStatus.isEmpty ? '' : ' • ${match.displayStatus}'}",
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: match.isLive
+                              ? AppColors.liveRed
+                              : AppColors.textGrey,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else ...[
+                // If header is hidden, still show Date & Time but maybe more central/compact?
+                // Actually, the user ONLY asked to remove Region Flag, Region Name, League Name.
+                // If I remove them, I should probably still show Date/Time so users know when it is.
+                Text(
+                  "${match.date} • ${match.time}${match.displayStatus.isEmpty ? '' : ' • ${match.displayStatus}'}",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        match.isLive ? AppColors.liveRed : AppColors.textGrey,
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 12),
 
               // Teams Comparison / Result
