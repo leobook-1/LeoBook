@@ -125,17 +125,6 @@ async def _smart_text(page, context: str, key: str) -> Optional[str]:
     return None
 
 
-async def _smart_text(page, context: str, key: str) -> Optional[str]:
-    """Safe text extraction using direct selector lookup."""
-    try:
-        selector = SelectorManager.get_selector(context, key)
-        if selector:
-            return await _raw_safe_text(page, selector)
-    except:
-        pass
-    return None
-
-
 def _id_from_href(href: str) -> Optional[str]:
     """Extract entity ID from a flashscore URL like /team/name/ABC123/."""
     if not href:
@@ -255,28 +244,58 @@ async def extract_match_enrichment(page, match_url: str, sel: Dict[str, str],
             except:
                 pass
 
-        # --- LEAGUE_ID DEEP SCRAPE ---
+        # --- LEAGUE_ID DEEP SCRAPE (visit league page for real hash ID) ---
         if 'league_id' in needs:
-            # 3. League URL (Deep Scrape)
             league_url = await _smart_attr(page, "fs_match_page", "league_url", "href")
             if league_url:
                 enriched['league_url'] = _standardize_url(league_url)
-                # Parse ID from URL
-                enriched['league_id'] = _id_from_href(league_url)
-                enriched['rl_id'] = enriched['league_id']
                 
-                # Visit results page to get metadata
+                # CRITICAL: Visit the league page so Flashscore JS injects the
+                # real league ID into the URL hash (e.g. /#/21FuA3md/)
                 try:
-                    from Core.Browser.Extractors.league_page_extractor import extract_league_metadata
-                    l_results_url = enriched.get('league_url')
-                    if not l_results_url.endswith('/results/'): l_results_url = l_results_url.rstrip('/') + '/results/'
-                    await page.goto(l_results_url, wait_until='domcontentloaded')
-                    await asyncio.sleep(2)
+                    await retry_extraction(
+                        lambda: page.goto(enriched['league_url'], wait_until='networkidle', timeout=30000)
+                    )
+                    await asyncio.sleep(2.5)  # Allow JS to update URL with season hash
                     
-                    league_meta = await extract_league_metadata(page)
-                    if league_meta:
-                        enriched.update(league_meta)
-                except: pass
+                    final_url = page.url
+                    league_id = None
+                    if '#/' in final_url:
+                        try:
+                            hash_part = final_url.split('#/')[1].split('/')[0]
+                            if hash_part and len(hash_part) > 5:  # typical Flashscore ID length
+                                league_id = hash_part
+                        except (IndexError, AttributeError):
+                            pass
+                    
+                    if league_id:
+                        enriched['league_id'] = league_id
+                        enriched['rl_id'] = league_id
+                        print(f"      [league_id] extracted after visit: {league_id}")
+                    else:
+                        # fallback to href ID (slug)
+                        enriched['league_id'] = _id_from_href(league_url)
+                        enriched['rl_id'] = enriched['league_id']
+                        print(f"      [league_id] fallback to href: {enriched['league_id']}")
+                    
+                    # Visit results page to extract metadata (crest, flag, season)
+                    try:
+                        from Core.Browser.Extractors.league_page_extractor import extract_league_metadata
+                        l_results_url = enriched.get('league_url', '').rstrip('/') + '/results/'
+                        await page.goto(l_results_url, wait_until='domcontentloaded', timeout=20000)
+                        await asyncio.sleep(2)
+                        
+                        league_meta = await extract_league_metadata(page)
+                        if league_meta:
+                            enriched.update(league_meta)
+                    except Exception as meta_e:
+                        print(f"      [WARNING] League metadata extraction failed: {meta_e}")
+                    
+                except Exception as visit_e:
+                    print(f"      [WARNING] League page visit failed for {league_url}: {visit_e}")
+                    # fallback to original href parsing
+                    enriched['league_id'] = _id_from_href(league_url)
+                    enriched['rl_id'] = enriched['league_id']
             else:
                 print(f"      [ALERT] No league URL found for {match_url}. Flagging for manual review.")
                 enriched['match_status'] = 'manual_review_needed'
@@ -535,14 +554,27 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
     # Load with Pandas for Analysis
     df_schedules = pd.read_csv(SCHEDULES_CSV, dtype=str).fillna('')
     
-    # --- ROW CLEANUP: Remove invalid matches ---
+    # --- ROW CLEANUP: Remove invalid matches (with safety guard) ---
     initial_count = len(df_schedules)
-    df_schedules = df_schedules[~((df_schedules['fixture_id'] == '') & (df_schedules['match_link'] == ''))]
-    removed_count = initial_count - len(df_schedules)
-    if removed_count > 0:
-        print(f"[CLEANUP] Removed {removed_count} rows with missing both fixture_id and match_link.")
-        if not dry_run:
-            df_schedules.to_csv(SCHEDULES_CSV, index=False, encoding='utf-8')
+    if initial_count > 0:
+        # Trim whitespace in key columns before checking
+        df_schedules['fixture_id'] = df_schedules['fixture_id'].str.strip()
+        df_schedules['match_link'] = df_schedules['match_link'].str.strip()
+        
+        invalid_mask = (df_schedules['fixture_id'] == '') & (df_schedules['match_link'] == '')
+        removal_count = invalid_mask.sum()
+        
+        # SAFETY GUARD: If cleanup would remove >50% of rows, something is wrong — abort
+        if removal_count > 0 and removal_count < (initial_count * 0.5):
+            df_schedules = df_schedules[~invalid_mask]
+            print(f"[CLEANUP] Removed {removal_count} rows with missing both fixture_id and match_link.")
+            if not dry_run:
+                df_schedules.to_csv(SCHEDULES_CSV, index=False, encoding='utf-8')
+        elif removal_count >= (initial_count * 0.5):
+            print(f"[SAFETY] Cleanup would remove {removal_count}/{initial_count} rows (>50%). Skipping to prevent data loss.")
+            # Debug: show sample of what would be removed
+            sample = df_schedules[invalid_mask].head(3)
+            print(f"[DEBUG] Sample rows that would be removed: {sample[['fixture_id', 'match_link']].to_dict('records')}")
 
     gaps_found = analyze_metadata_gaps(df_schedules)
     print(f"[INFO] Initial scan found {len(gaps_found)} fixtures with structural metadata gaps.")
@@ -703,7 +735,7 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                                 'region_url': match.get('region_url', ''),
                                 'league': league,
                                 'league_url': match.get('league_url', ''),
-                                'league_crest': ''  # Not available on match page
+                                'league_crest': match.get('league_crest', '')
                             }
                             save_region_league_entry(league_data)
                             leagues_added.add(rl_id)

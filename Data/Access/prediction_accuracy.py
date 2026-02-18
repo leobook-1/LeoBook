@@ -338,14 +338,19 @@ def print_accuracy_report():
         print(f"  [Accuracy Error] Failed to read predictions: {e}")
         return
 
-    # Filter for reviewed predictions only
+    # Filter for reviewed predictions only (must have actual resolved outcomes)
     reviewed_predictions = [
         pred for pred in predictions
         if pred.get('outcome_correct') in ['True', 'False']
     ]
 
+    total_pending = sum(1 for p in predictions if p.get('status') == 'pending')
+    
     if not reviewed_predictions:
-        print("  [Accuracy] No reviewed predictions found.")
+        if total_pending > 0:
+            print(f"  [Accuracy] {total_pending} predictions still pending — no outcomes resolved yet. Skipping report.")
+        else:
+            print("  [Accuracy] No reviewed predictions found.")
         return
 
     # Calculate accuracy by date

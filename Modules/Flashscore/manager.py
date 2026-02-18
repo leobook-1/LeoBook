@@ -74,125 +74,131 @@ async def run_flashscore_analysis(playwright: Playwright):
         await fs_universal_popup_dismissal(page, "fs_home_page")
 
         last_processed_info = get_last_processed_info()
-        print(f"  [Chapter 1A] Starting analysis loop for 7 days...")
-        for day_offset in range(7):
-            target_date = dt.now(NIGERIA_TZ) + timedelta(days=day_offset)
-            target_full = target_date.strftime("%d.%m.%Y")
+        
+        # Fix #5: If resume date is already in the future, skip forward scanning
+        resume_date = last_processed_info.get('date_obj')
+        if resume_date and resume_date > (dt.now(NIGERIA_TZ) + timedelta(days=7)).date():
+            print(f"  [Chapter 1A] Resume date {resume_date} is beyond 7-day window. All caught up — skipping forward scan.")
+        else:
+            print(f"  [Chapter 1A] Starting analysis loop for 7 days...")
+            for day_offset in range(7):
+                target_date = dt.now(NIGERIA_TZ) + timedelta(days=day_offset)
+                target_full = target_date.strftime("%d.%m.%Y")
             
-            if day_offset > 0:
-                match_row_sel = await SelectorManager.get_selector_auto(page, "fs_home_page", "match_rows")
-                if not match_row_sel or not await click_next_day(page, match_row_sel):
-                    break
-                await asyncio.sleep(2)
+                if day_offset > 0:
+                    match_row_sel = await SelectorManager.get_selector_auto(page, "fs_home_page", "match_rows")
+                    if not match_row_sel or not await click_next_day(page, match_row_sel):
+                        break
+                    await asyncio.sleep(2)
 
-            if last_processed_info.get('date_obj') and target_date.date() < last_processed_info['date_obj']:
-                continue
+                if resume_date and target_date.date() < resume_date:
+                    continue
 
-            print(f"\n--- ANALYZING DATE: {target_full} ---")
-            await fs_universal_popup_dismissal(page, "fs_home_page")
+                print(f"\n--- ANALYZING DATE: {target_full} ---")
+                await fs_universal_popup_dismissal(page, "fs_home_page")
 
-            try:
-                scheduled_tab_sel = await SelectorManager.get_selector_auto(page, "fs_home_page", "tab_scheduled")
-                if scheduled_tab_sel and await page.locator(scheduled_tab_sel).is_visible(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT):
-                    await page.click(scheduled_tab_sel)
-                    await asyncio.sleep(2.0)
-            except Exception:
-                pass
-
-            await fs_universal_popup_dismissal(page, "fs_home_page")
-            matches_data = await extract_matches_from_page(page)
-            
-            # --- Cleaning & Sorting ---
-            for m in matches_data:
-                original_time_str = m.get('time')
-                if original_time_str:
-                    clean_time_str = original_time_str.split('\n')[0].strip()
-                    m['time'] = clean_time_str if clean_time_str and clean_time_str != 'N/A' else 'N/A'
-
-            matches_data.sort(key=lambda x: x.get('time', '23:59'))
-
-            # --- Load existing predictions for robust resume ---
-            from Data.Access.db_helpers import PREDICTIONS_CSV
-            import csv
-            existing_ids = set()
-            if os.path.exists(PREDICTIONS_CSV):
                 try:
-                    with open(PREDICTIONS_CSV, 'r', encoding='utf-8') as f:
-                        reader = csv.DictReader(f)
-                        existing_ids = {row['fixture_id'] for row in reader if row.get('fixture_id')}
+                    scheduled_tab_sel = await SelectorManager.get_selector_auto(page, "fs_home_page", "tab_scheduled")
+                    if scheduled_tab_sel and await page.locator(scheduled_tab_sel).is_visible(timeout=WAIT_FOR_LOAD_STATE_TIMEOUT):
+                        await page.click(scheduled_tab_sel)
+                        await asyncio.sleep(2.0)
                 except Exception:
                     pass
 
-            # --- Save to DB & Filter ---
-            valid_matches = []
-            now_time = dt.now(NIGERIA_TZ).time()
-            is_today = target_date.date() == dt.now(NIGERIA_TZ).date()
+                await fs_universal_popup_dismissal(page, "fs_home_page")
+                matches_data = await extract_matches_from_page(page)
+                
+                # --- Cleaning & Sorting ---
+                for m in matches_data:
+                    original_time_str = m.get('time')
+                    if original_time_str:
+                        clean_time_str = original_time_str.split('\n')[0].strip()
+                        m['time'] = clean_time_str if clean_time_str and clean_time_str != 'N/A' else 'N/A'
 
-            def is_time_parsable(t_str):
-                try:
-                    dt.strptime(t_str, '%H:%M')
-                    return True
-                except (ValueError, TypeError):
-                    return False
+                matches_data.sort(key=lambda x: x.get('time', '23:59'))
 
-            for m in matches_data:
-                fixture_id = m.get('id')
-                m['date'] = target_full
-                save_schedule_entry({
-                    'fixture_id': fixture_id, 'date': m.get('date'), 'match_time': m.get('time'),
-                    'region_league': m.get('region_league'), 'home_team': m.get('home_team'),
-                    'away_team': m.get('away_team'), 'home_team_id': m.get('home_team_id'),
-                    'away_team_id': m.get('away_team_id'), 'match_status': 'scheduled',
-                    'match_link': m.get('match_link')
-                })
-                save_team_entry({'team_id': m.get('home_team_id'), 'team_name': m.get('home_team'), 'region_league': m.get('region_league'), 'team_url': m.get('home_team_url')})
-                save_team_entry({'team_id': m.get('away_team_id'), 'team_name': m.get('away_team'), 'region_league': m.get('region_league'), 'team_url': m.get('away_team_url')})
+                # --- Load existing predictions for robust resume ---
+                from Data.Access.db_helpers import PREDICTIONS_CSV
+                import csv
+                existing_ids = set()
+                if os.path.exists(PREDICTIONS_CSV):
+                    try:
+                        with open(PREDICTIONS_CSV, 'r', encoding='utf-8') as f:
+                            reader = csv.DictReader(f)
+                            existing_ids = {row['fixture_id'] for row in reader if row.get('fixture_id')}
+                    except Exception:
+                        pass
 
-                # Robust Resume: Skip if already predicted
-                if fixture_id in existing_ids:
-                    continue
+                # --- Save to DB & Filter ---
+                valid_matches = []
+                now_time = dt.now(NIGERIA_TZ).time()
+                is_today = target_date.date() == dt.now(NIGERIA_TZ).date()
 
-                if is_today:
-                    time_str = m.get('time')
-                    if is_time_parsable(time_str):
-                        if dt.strptime(time_str, '%H:%M').time() > now_time:
-                            valid_matches.append(m)
+                def is_time_parsable(t_str):
+                    try:
+                        dt.strptime(t_str, '%H:%M')
+                        return True
+                    except (ValueError, TypeError):
+                        return False
+
+                for m in matches_data:
+                    fixture_id = m.get('id')
+                    m['date'] = target_full
+                    save_schedule_entry({
+                        'fixture_id': fixture_id, 'date': m.get('date'), 'match_time': m.get('time'),
+                        'region_league': m.get('region_league'), 'home_team': m.get('home_team'),
+                        'away_team': m.get('away_team'), 'home_team_id': m.get('home_team_id'),
+                        'away_team_id': m.get('away_team_id'), 'match_status': 'scheduled',
+                        'match_link': m.get('match_link')
+                    })
+                    save_team_entry({'team_id': m.get('home_team_id'), 'team_name': m.get('home_team'), 'region_league': m.get('region_league'), 'team_url': m.get('home_team_url')})
+                    save_team_entry({'team_id': m.get('away_team_id'), 'team_name': m.get('away_team'), 'region_league': m.get('region_league'), 'team_url': m.get('away_team_url')})
+
+                    # Robust Resume: Skip if already predicted
+                    if fixture_id in existing_ids:
+                        continue
+
+                    if is_today:
+                        time_str = m.get('time')
+                        if is_time_parsable(time_str):
+                            if dt.strptime(time_str, '%H:%M').time() > now_time:
+                                valid_matches.append(m)
+                        else:
+                            # Non-parsable time (Postponed, etc) - Keep it in valid_matches for analysis
+                            # unless it's explicitly 'N/A' or 'Fin'
+                            if time_str not in ('N/A', 'Fin', 'Finished', 'CAN'):
+                                valid_matches.append(m)
                     else:
-                        # Non-parsable time (Postponed, etc) - Keep it in valid_matches for analysis
-                        # unless it's explicitly 'N/A' or 'Fin'
-                        if time_str not in ('N/A', 'Fin', 'Finished', 'CAN'):
-                            valid_matches.append(m)
-                else:
-                    valid_matches.append(m)
+                        valid_matches.append(m)
 
-            # --- Batch Processing With Dynamic Concurrency ---
-            if valid_matches:
-                # Dynamic scaling
-                if len(valid_matches) > 100:
-                    max_concurrent = min(env_concurrency + 3, 10) # Aggressive
-                elif len(valid_matches) < 20:
-                    max_concurrent = max(env_concurrency - 2, 2) # Conservative
+                # --- Batch Processing With Dynamic Concurrency ---
+                if valid_matches:
+                    # Dynamic scaling
+                    if len(valid_matches) > 100:
+                        max_concurrent = min(env_concurrency + 3, 10) # Aggressive
+                    elif len(valid_matches) < 20:
+                        max_concurrent = max(env_concurrency - 2, 2) # Conservative
+                    else:
+                        max_concurrent = env_concurrency             # Standard
+                    
+                    print(f"    [Batching] Processing {len(valid_matches)} matches concurrently (Scaling: {max_concurrent})...")
+                    processor = BatchProcessor(max_concurrent=max_concurrent)
+                    
+                    # Process in smaller chunks to trigger frequent syncs
+                    analysis_chunk_size = 10
+                    for i in range(0, len(valid_matches), analysis_chunk_size):
+                        chunk = valid_matches[i:i + analysis_chunk_size]
+                        chunk_results = await processor.run_batch(chunk, process_match_task, browser=browser)
+                        
+                        successful_in_chunk = sum(1 for r in chunk_results if r)
+                        total_cycle_predictions += successful_in_chunk
+                        
+                        if successful_in_chunk > 0:
+                            print(f"\n   [Analytics Sync] {total_cycle_predictions} predictions generated. Triggering micro-batch sync...")
+                            from Data.Access.sync_manager import run_full_sync
+                            await run_full_sync()
                 else:
-                    max_concurrent = env_concurrency             # Standard
-                
-                print(f"    [Batching] Processing {len(valid_matches)} matches concurrently (Scaling: {max_concurrent})...")
-                processor = BatchProcessor(max_concurrent=max_concurrent)
-                
-                # Process in smaller chunks to trigger frequent syncs
-                analysis_chunk_size = 10
-                for i in range(0, len(valid_matches), analysis_chunk_size):
-                    chunk = valid_matches[i:i + analysis_chunk_size]
-                    chunk_results = await processor.run_batch(chunk, process_match_task, browser=browser)
-                    
-                    successful_in_chunk = sum(1 for r in chunk_results if r)
-                    total_cycle_predictions += successful_in_chunk
-                    
-                    if successful_in_chunk > 0:
-                        print(f"\n   [Analytics Sync] {total_cycle_predictions} predictions generated. Triggering micro-batch sync...")
-                        from Data.Access.sync_manager import run_full_sync
-                        await run_full_sync()
-            else:
-                print("    [Info] No new matches to process.")
+                    print("    [Info] No new matches to process.")
 
     finally:
         if context is not None:

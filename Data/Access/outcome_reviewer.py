@@ -102,8 +102,15 @@ def get_predictions_to_review() -> List[Dict]:
         # Localize scheduled_dt if naive (usually it is)
         df['scheduled_dt'] = df['scheduled_dt'].apply(lambda x: lagos_tz.localize(x) if x.tzinfo is None else x)
 
-        # 5. Filter for past matches (scheduled_time < current_time)
-        to_review_df = df[df['scheduled_dt'] < now_lagos]
+        # 5. Filter for FINISHED matches only (scheduled ≥ 2.5h ago)
+        # A football match takes ~2h. Adding 30min buffer to avoid visiting
+        # matches still in progress — prevents wasted browser time + AIGO fallbacks.
+        completion_cutoff = now_lagos - timedelta(hours=2, minutes=30)
+        to_review_df = df[df['scheduled_dt'] < completion_cutoff]
+        
+        skipped = len(df[df['scheduled_dt'] < now_lagos]) - len(to_review_df)
+        if skipped > 0:
+            print(f"   [Filter] Skipped {skipped} matches still possibly in progress (< 2.5h old).")
         
         # Limit to LOOKBACK_LIMIT
         if len(to_review_df) > LOOKBACK_LIMIT:

@@ -141,6 +141,7 @@ async def main():
 
                     # --- CHAPTER 1 PAGE 2: Odds Harvesting & URL Resolution ---
                     log_state(chapter="Ch1 P2", action="Odds Harvesting & URL Resolution")
+                    fb_session_healthy = False  # Fix #6: Session health flag
                     try:
                         print("\n" + "=" * 60)
                         print("  CHAPTER 1 PAGE 2: Odds Harvesting & URL Resolution")
@@ -148,10 +149,12 @@ async def main():
 
                         # Resolve URLs and harvest odds/booking codes (no placement)
                         await run_odds_harvesting(p)
+                        fb_session_healthy = True  # Only set True if harvesting succeeded
 
                         log_audit_event("CH1_P2", "Odds harvesting and URL resolution completed.", status="success")
                     except Exception as e:
                         print(f"  [Error] Chapter 1 Page 2 failed: {e}")
+                        print(f"  [Session] Football.com session marked unhealthy — Chapter 2 will be skipped.")
                         log_audit_event("CH1_P2", f"Failed: {e}", status="failed")
 
                     # --- CHAPTER 1 PAGE 3: Final Sync & Recommendations ---
@@ -177,46 +180,53 @@ async def main():
                     # 🟡 CHAPTER 2: AUTOMATED BOOKING & FUNDS MANAGEMENT
                     # ============================================================
 
-                    # --- CHAPTER 2 PAGE 1: Automated Booking ---
-                    log_state(chapter="Ch2 P1", action="Automated Booking (Football.com)")
-                    try:
+                    # Fix #6: Skip entire Chapter 2 if Football.com session is dead
+                    if not fb_session_healthy:
                         print("\n" + "=" * 60)
-                        print("  CHAPTER 2 PAGE 1: Automated Booking")
+                        print("  CHAPTER 2: SKIPPED — Football.com session unhealthy")
                         print("=" * 60)
+                        log_audit_event("CH2_SKIPPED", "Skipped: Football.com session failed in Ch1 P2.", status="skipped")
+                    else:
+                        # --- CHAPTER 2 PAGE 1: Automated Booking ---
+                        log_state(chapter="Ch2 P1", action="Automated Booking (Football.com)")
+                        try:
+                            print("\n" + "=" * 60)
+                            print("  CHAPTER 2 PAGE 1: Automated Booking")
+                            print("=" * 60)
 
-                        # Place multi-bets from harvested codes (decoupled from harvesting)
-                        await run_automated_booking(p)
+                            # Place multi-bets from harvested codes (decoupled from harvesting)
+                            await run_automated_booking(p)
 
-                        log_audit_event("CH2_P1", "Automated booking phase completed.", status="success")
-                    except Exception as e:
-                        print(f"  [Error] Chapter 2 Page 1 failed: {e}")
-                        log_audit_event("CH2_P1", f"Failed: {e}", status="failed")
+                            log_audit_event("CH2_P1", "Automated booking phase completed.", status="success")
+                        except Exception as e:
+                            print(f"  [Error] Chapter 2 Page 1 failed: {e}")
+                            log_audit_event("CH2_P1", f"Failed: {e}", status="failed")
 
-                    # --- CHAPTER 2 PAGE 2: Funds & Withdrawal Check ---
-                    log_state(chapter="Ch2 P2", action="Funds & Withdrawal Check")
-                    try:
-                        print("\n" + "=" * 60)
-                        print("  CHAPTER 2 PAGE 2: Funds & Withdrawal Check")
-                        print("=" * 60)
+                        # --- CHAPTER 2 PAGE 2: Funds & Withdrawal Check ---
+                        log_state(chapter="Ch2 P2", action="Funds & Withdrawal Check")
+                        try:
+                            print("\n" + "=" * 60)
+                            print("  CHAPTER 2 PAGE 2: Funds & Withdrawal Check")
+                            print("=" * 60)
 
-                        async with await p.chromium.launch(headless=True) as check_browser:
-                            from Modules.FootballCom.navigator import extract_balance
-                            check_page = await check_browser.new_page()
-                            state["current_balance"] = await extract_balance(check_page)
+                            async with await p.chromium.launch(headless=True) as check_browser:
+                                from Modules.FootballCom.navigator import extract_balance
+                                check_page = await check_browser.new_page()
+                                state["current_balance"] = await extract_balance(check_page)
 
-                        if await check_triggers():
-                            proposed_amount = calculate_proposed_amount(state["current_balance"], get_latest_win())
-                            await propose_withdrawal(proposed_amount)
+                            if await check_triggers():
+                                proposed_amount = calculate_proposed_amount(state["current_balance"], get_latest_win())
+                                await propose_withdrawal(proposed_amount)
 
-                        # Check if a previously proposed withdrawal was approved via Web/App
-                        if await check_withdrawal_approval():
-                            from Core.System.withdrawal_checker import pending_withdrawal
-                            await execute_withdrawal(pending_withdrawal["amount"])
+                            # Check if a previously proposed withdrawal was approved via Web/App
+                            if await check_withdrawal_approval():
+                                from Core.System.withdrawal_checker import pending_withdrawal
+                                await execute_withdrawal(pending_withdrawal["amount"])
 
-                        log_audit_event("CH2_P2", f"Withdrawal check completed. Balance: {state.get('current_balance', 'N/A')}", status="success")
-                    except Exception as e:
-                        print(f"  [Warning] Chapter 2 Page 2 failed: {e}")
-                        log_audit_event("CH2_P2", f"Failed: {e}", status="failed")
+                            log_audit_event("CH2_P2", f"Withdrawal check completed. Balance: {state.get('current_balance', 'N/A')}", status="success")
+                        except Exception as e:
+                            print(f"  [Warning] Chapter 2 Page 2 failed: {e}")
+                            log_audit_event("CH2_P2", f"Failed: {e}", status="failed")
 
                     # ============================================================
                     # 🔵 CHAPTER 3: CHIEF ENGINEER MONITORING & OVERSIGHT
