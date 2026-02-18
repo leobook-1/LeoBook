@@ -131,29 +131,41 @@ class HomeCubit extends Cubit<HomeState> {
         ),
       );
 
-      // --- Start Realtime Subscription ---
+      // --- Start Realtime Subscriptions ---
       _predictionsSub?.cancel();
       _predictionsSub = _dataRepository
           .watchPredictions(date: selectionDate)
           .listen((updatedMatches) {
         _handleRealtimeUpdate(updatedMatches);
       });
+
+      _liveScoresSub?.cancel();
+      _liveScoresSub = _dataRepository.watchLiveScores().listen((liveUpdates) {
+        _handleRealtimeUpdate(liveUpdates);
+      });
     } catch (e) {
       emit(HomeError("Failed to load dashboard: $e"));
     }
   }
 
+  StreamSubscription? _liveScoresSub;
+
   void _handleRealtimeUpdate(List<MatchModel> updatedMatches) {
     if (state is HomeLoaded) {
       final currentState = state as HomeLoaded;
 
-      // Merge updated matches into the current state
+      // Merge updated matches into the current state preservation prediction data
       final Map<String, MatchModel> matchMap = {
         for (var m in currentState.allMatches) m.fixtureId: m,
       };
 
       for (var updated in updatedMatches) {
-        matchMap[updated.fixtureId] = updated;
+        final existing = matchMap[updated.fixtureId];
+        if (existing != null) {
+          matchMap[updated.fixtureId] = existing.mergeWith(updated);
+        } else {
+          matchMap[updated.fixtureId] = updated;
+        }
       }
 
       final mergedMatches = matchMap.values.toList();

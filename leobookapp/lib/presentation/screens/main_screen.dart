@@ -130,10 +130,7 @@ class _MainScreenState extends State<MainScreen> {
 
             return Scaffold(
               extendBody: true,
-              body: SafeArea(
-                bottom: false,
-                child: scaffoldBody,
-              ),
+              body: scaffoldBody,
               bottomNavigationBar: Container(
                 color: Colors.transparent,
                 margin: Responsive.bottomNavMargin(context),
@@ -148,8 +145,8 @@ class _MainScreenState extends State<MainScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: isDark
-                            ? AppColors.cardDark.withValues(alpha: 0.65)
-                            : Colors.white.withValues(alpha: 0.65),
+                            ? AppColors.cardDark.withValues(alpha: 0.35)
+                            : Colors.white.withValues(alpha: 0.35),
                         borderRadius:
                             BorderRadius.circular(Responsive.sp(context, 18)),
                         border: Border.all(
@@ -168,18 +165,19 @@ class _MainScreenState extends State<MainScreen> {
                         backgroundColor: Colors.transparent,
                         elevation: 0,
                         type: BottomNavigationBarType.fixed,
-                        selectedItemColor: AppColors.primary,
-                        unselectedItemColor:
-                            isDark ? Colors.white38 : AppColors.textGrey,
                         showSelectedLabels: true,
-                        showUnselectedLabels: false,
+                        showUnselectedLabels: true,
+                        selectedFontSize: Responsive.sp(context, 7),
+                        unselectedFontSize: Responsive.sp(context, 7),
                         selectedLabelStyle: TextStyle(
                           fontSize: Responsive.sp(context, 7),
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.5,
                         ),
                         unselectedLabelStyle: TextStyle(
-                          fontSize: Responsive.sp(context, 6),
+                          fontSize: Responsive.sp(context, 7),
+                          color:
+                              Colors.transparent, // Hidden but occupies space
                         ),
                         items: [
                           _buildNavItem(
@@ -228,11 +226,18 @@ class _MainScreenState extends State<MainScreen> {
     final isSelected = _currentIndex == index;
     final iconSize = Responsive.sp(context, 16);
     return BottomNavigationBarItem(
-      icon: AnimatedScale(
-        scale: isSelected ? 1.0 : 0.85,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        child: Icon(inactiveIcon, size: iconSize),
+      icon: Container(
+        padding: EdgeInsets.all(Responsive.sp(context, 5)),
+        decoration: const BoxDecoration(
+          color: Colors.transparent,
+          shape: BoxShape.circle,
+        ),
+        child: AnimatedScale(
+          scale: isSelected ? 1.0 : 0.85,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          child: Icon(inactiveIcon, size: iconSize),
+        ),
       ),
       activeIcon: AnimatedScale(
         scale: 1.0,

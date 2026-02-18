@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'top_predictions_grid.dart';
 import 'category_bar.dart';
@@ -10,6 +11,7 @@ import '../../../core/utils/match_sorter.dart';
 import 'package:leobookapp/presentation/widgets/match_card.dart';
 import '../footnote_section.dart';
 import 'package:leobookapp/data/models/match_model.dart';
+import '../../../core/theme/liquid_glass_theme.dart';
 
 class DesktopHomeContent extends StatefulWidget {
   final HomeLoaded state;
@@ -332,7 +334,20 @@ class _PinnedHeaderDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return child;
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: LiquidGlassTheme.blurRadiusMedium,
+          sigmaY: LiquidGlassTheme.blurRadiusMedium,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.backgroundDark.withValues(alpha: 0.35),
+          ),
+          child: child,
+        ),
+      ),
+    );
   }
 
   @override

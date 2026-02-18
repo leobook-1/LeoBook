@@ -136,6 +136,14 @@ class MatchModel {
 
   bool get isLive {
     final s = status.toLowerCase();
+    // Explicitly check status first
+    if (s.contains('live') ||
+        s.contains('in-play') ||
+        s.contains('halftime') ||
+        s.contains('ht')) {
+      return true;
+    }
+
     if (s.contains('finish') || s.contains('ft') || s.contains('finished')) {
       return false;
     }
@@ -306,6 +314,7 @@ class MatchModel {
       confidence: confidence,
       odds: odds,
       marketReliability: marketReliability,
+      liveMinute: (row['minute'] ?? row['live_minute'])?.toString(),
       isFeatured: isFeatured,
       homeCrestUrl: row['home_crest_url']?.toString(),
       awayCrestUrl: row['away_crest_url']?.toString(),
@@ -316,6 +325,39 @@ class MatchModel {
       homeFormN: (row['home_form_n'] as num?)?.toInt(),
       awayFormN: (row['away_form_n'] as num?)?.toInt(),
       outcomeCorrect: outcomeCorrect,
+    );
+  }
+
+  MatchModel mergeWith(MatchModel other) {
+    return MatchModel(
+      fixtureId: fixtureId,
+      date: other.date.isNotEmpty ? other.date : date,
+      time: other.time.isNotEmpty ? other.time : time,
+      homeTeam: other.homeTeam.isNotEmpty ? other.homeTeam : homeTeam,
+      awayTeam: other.awayTeam.isNotEmpty ? other.awayTeam : awayTeam,
+      homeTeamId: other.homeTeamId ?? homeTeamId,
+      awayTeamId: other.awayTeamId ?? awayTeamId,
+      homeScore: other.homeScore ?? homeScore,
+      awayScore: other.awayScore ?? awayScore,
+      status: other.status,
+      sport: other.sport.isNotEmpty ? other.sport : sport,
+      league: other.league ?? league,
+      prediction: prediction, // Preserve existing
+      odds: odds, // Preserve existing
+      confidence: confidence, // Preserve existing
+      liveMinute: other.liveMinute ?? liveMinute,
+      isFeatured: isFeatured, // Preserve existing
+      valueTag: valueTag, // Preserve existing
+      homeCrestUrl: other.homeCrestUrl ?? homeCrestUrl,
+      awayCrestUrl: other.awayCrestUrl ?? awayCrestUrl,
+      regionFlagUrl: other.regionFlagUrl ?? regionFlagUrl,
+      marketReliability: marketReliability, // Preserve existing
+      xgHome: xgHome, // Preserve existing
+      xgAway: xgAway, // Preserve existing
+      reasonTags: reasonTags, // Preserve existing
+      homeFormN: homeFormN, // Preserve existing
+      awayFormN: awayFormN, // Preserve existing
+      outcomeCorrect: other.outcomeCorrect ?? outcomeCorrect,
     );
   }
 }

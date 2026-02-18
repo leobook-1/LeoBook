@@ -141,7 +141,7 @@ class MatchCard extends StatelessWidget {
                       SizedBox(height: Responsive.sp(context, 2)),
                       // Date & Time
                       Text(
-                        "${match.date} • ${match.time}${match.displayStatus.isEmpty ? '' : ' • ${match.displayStatus}'}",
+                        "${match.date} • ${match.isLive && (match.liveMinute != null && match.liveMinute!.isNotEmpty) ? "${match.liveMinute}'" : match.time}${match.displayStatus.isEmpty ? '' : ' • ${match.displayStatus}'}",
                         style: TextStyle(
                           fontSize: Responsive.sp(context, 7),
                           fontWeight: FontWeight.bold,
@@ -155,7 +155,7 @@ class MatchCard extends StatelessWidget {
                 )
               else ...[
                 Text(
-                  "${match.date} • ${match.time}${match.displayStatus.isEmpty ? '' : ' • ${match.displayStatus}'}",
+                  "${match.date} • ${match.isLive && (match.liveMinute != null && match.liveMinute!.isNotEmpty) ? "${match.liveMinute}'" : match.time}${match.displayStatus.isEmpty ? '' : ' • ${match.displayStatus}'}",
                   style: TextStyle(
                     fontSize: Responsive.sp(context, 7),
                     fontWeight: FontWeight.bold,
@@ -285,7 +285,8 @@ class MatchCard extends StatelessWidget {
               top: 0,
               right: 0,
               child: _LiveBadge(
-                minute: match.isLive ? match.liveMinute : "SOON",
+                minute: match.isLive ? match.liveMinute : null,
+                isSoon: match.isStartingSoon && !match.isLive,
               ),
             ),
           if (isFinished && match.isPredictionAccurate)
@@ -652,7 +653,8 @@ class MatchCard extends StatelessWidget {
 
 class _LiveBadge extends StatefulWidget {
   final String? minute;
-  const _LiveBadge({this.minute});
+  final bool isSoon;
+  const _LiveBadge({this.minute, this.isSoon = false});
 
   @override
   State<_LiveBadge> createState() => _LiveBadgeState();
@@ -661,16 +663,24 @@ class _LiveBadge extends StatefulWidget {
 class _LiveBadgeState extends State<_LiveBadge>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 1),
+      duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.6, end: 1.0).animate(_controller);
+
+    _fadeAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.96, end: 1.02).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -681,26 +691,45 @@ class _LiveBadgeState extends State<_LiveBadge>
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: Responsive.sp(context, 5),
-          vertical: Responsive.sp(context, 1.5),
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.liveRed,
-          borderRadius: BorderRadius.only(
-            topRight: Radius.circular(Responsive.sp(context, 10)),
-            bottomLeft: Radius.circular(Responsive.sp(context, 6)),
+    String label = "LIVE";
+    if (widget.isSoon) {
+      label = "SOON";
+    } else if (widget.minute != null && widget.minute!.isNotEmpty) {
+      label = "LIVE ${widget.minute}'";
+    }
+
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: Responsive.sp(context, 6),
+            vertical: Responsive.sp(context, 2),
           ),
-        ),
-        child: Text(
-          "LIVE ${widget.minute ?? ''}".toUpperCase(),
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: Responsive.sp(context, 6),
-            fontWeight: FontWeight.w900,
+          decoration: BoxDecoration(
+            color: widget.isSoon ? AppColors.primary : AppColors.liveRed,
+            borderRadius: BorderRadius.only(
+              topRight: Radius.circular(Responsive.sp(context, 10)),
+              bottomLeft: Radius.circular(Responsive.sp(context, 6)),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (widget.isSoon ? AppColors.primary : AppColors.liveRed)
+                    .withValues(alpha: 0.3),
+                blurRadius: 4,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: Responsive.sp(context, 6),
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
           ),
         ),
       ),

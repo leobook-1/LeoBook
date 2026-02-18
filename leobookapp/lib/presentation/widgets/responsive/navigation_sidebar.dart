@@ -33,7 +33,7 @@ class NavigationSideBar extends StatelessWidget {
             child: Container(
               height: double.infinity,
               decoration: BoxDecoration(
-                color: AppColors.surfaceDark.withValues(alpha: 0.7),
+                color: AppColors.backgroundDark.withValues(alpha: 0.35),
                 border: Border(
                   right: BorderSide(
                     color: LiquidGlassTheme.glassBorderDark,

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:leobookapp/logic/cubit/home_cubit.dart';
@@ -14,6 +15,7 @@ import '../widgets/responsive/category_bar.dart';
 import '../widgets/responsive/top_predictions_grid.dart';
 import '../../logic/cubit/search_cubit.dart';
 import 'search_screen.dart';
+import '../../core/theme/liquid_glass_theme.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool isSidebarExpanded;
@@ -60,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen>
             }
 
             return SafeArea(
+              bottom: false,
               child: RefreshIndicator(
                 onRefresh: () async {
                   context.read<HomeCubit>().loadDashboard();
@@ -67,10 +70,9 @@ class _HomeScreenState extends State<HomeScreen>
                 child: CustomScrollView(
                   physics: liquidScrollPhysics,
                   slivers: [
-                    SliverPadding(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: hp, vertical: Responsive.sp(context, 8)),
-                      sliver: SliverToBoxAdapter(
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _CategoryHeaderDelegate(
                         child: Row(
                           children: [
                             const Expanded(child: CategoryBar()),
@@ -107,6 +109,8 @@ class _HomeScreenState extends State<HomeScreen>
                             ),
                           ],
                         ),
+                        hp: hp,
+                        isDark: isDark,
                       ),
                     ),
                     SliverPadding(
@@ -347,10 +351,79 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
                 : Colors.black.withValues(alpha: 0.04),
           ),
         ),
-        Container(
+        ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: LiquidGlassTheme.blurRadiusMedium,
+              sigmaY: LiquidGlassTheme.blurRadiusMedium,
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: (isDark
+                        ? AppColors.backgroundDark
+                        : AppColors.backgroundLight)
+                    .withValues(alpha: 0.35),
+                border: Border(
+                  bottom: BorderSide(
+                    color: isDark
+                        ? Colors.white10
+                        : Colors.black.withValues(alpha: 0.04),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: _tabBar,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StickyTabBarDelegate oldDelegate) {
+    return false;
+  }
+}
+
+class _CategoryHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double hp;
+  final bool isDark;
+
+  _CategoryHeaderDelegate({
+    required this.child,
+    required this.hp,
+    required this.isDark,
+  });
+
+  @override
+  double get minExtent => 48; // Fixed height optimized for compact UI
+  @override
+  double get maxExtent => 48;
+
+  // We rewrite to use context in the builder
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: LiquidGlassTheme.blurRadiusMedium,
+          sigmaY: LiquidGlassTheme.blurRadiusMedium,
+        ),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: hp,
+            vertical: Responsive.sp(context, 4),
+          ),
           decoration: BoxDecoration(
             color:
-                isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+                (isDark ? AppColors.backgroundDark : AppColors.backgroundLight)
+                    .withValues(alpha: 0.35),
             border: Border(
               bottom: BorderSide(
                 color: isDark
@@ -360,14 +433,14 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
               ),
             ),
           ),
-          child: _tabBar,
+          child: child,
         ),
-      ],
+      ),
     );
   }
 
   @override
-  bool shouldRebuild(_StickyTabBarDelegate oldDelegate) {
-    return false;
+  bool shouldRebuild(_CategoryHeaderDelegate oldDelegate) {
+    return isDark != oldDelegate.isDark || hp != oldDelegate.hp;
   }
 }

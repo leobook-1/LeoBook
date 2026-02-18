@@ -5,6 +5,7 @@ import 'package:leobookapp/data/models/match_model.dart';
 import 'package:leobookapp/data/models/recommendation_model.dart';
 import 'package:leobookapp/data/models/standing_model.dart';
 import 'dart:convert';
+import 'dart:async';
 
 class DataRepository {
   static const String _keyRecommended = 'cached_recommended';
@@ -177,25 +178,54 @@ class DataRepository {
     }
   }
 
-  // --- Realtime Streams ---
+  // --- Realtime Streams (Broadcast Style) ---
 
   Stream<List<MatchModel>> watchLiveScores() {
-    return _supabase.from('live_scores').stream(primaryKey: ['fixture_id']).map(
-        (rows) => rows.map((row) => MatchModel.fromCsv(row)).toList());
+    final controller = StreamController<List<MatchModel>>();
+    final channel = _supabase.channel('public.live_scores');
+
+    channel
+        .onBroadcast(
+          event: '*',
+          callback: (payload, [_]) async {
+            final response = await _supabase.from('live_scores').select();
+            final matches = (response as List)
+                .map((row) => MatchModel.fromCsv(row))
+                .toList();
+            if (!controller.isClosed) controller.add(matches);
+          },
+        )
+        .subscribe();
+
+    controller.onCancel = () => channel.unsubscribe();
+    return controller.stream;
   }
 
   Stream<List<MatchModel>> watchPredictions({DateTime? date}) {
-    var query =
-        _supabase.from('predictions').stream(primaryKey: ['fixture_id']);
+    final controller = StreamController<List<MatchModel>>();
+    final channel = _supabase.channel('public.predictions');
 
-    return query.map((rows) {
-      var matches = rows.map((row) => MatchModel.fromCsv(row, row)).toList();
-      if (date != null) {
-        final dateStr =
-            "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-        matches = matches.where((m) => m.date == dateStr).toList();
-      }
-      return matches;
-    });
+    channel
+        .onBroadcast(
+          event: '*',
+          callback: (payload, [_]) async {
+            var query = _supabase.from('predictions').select();
+            if (date != null) {
+              final dateStr =
+                  "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+              query = query.eq('date', dateStr);
+            }
+            final response =
+                await query.order('date', ascending: false).limit(200);
+            final matches = (response as List)
+                .map((row) => MatchModel.fromCsv(row, row))
+                .toList();
+            if (!controller.isClosed) controller.add(matches);
+          },
+        )
+        .subscribe();
+
+    controller.onCancel = () => channel.unsubscribe();
+    return controller.stream;
   }
 }
