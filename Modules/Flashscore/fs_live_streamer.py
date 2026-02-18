@@ -154,45 +154,53 @@ def _propagate_status_updates(live_matches: list):
 async def _extract_live_matches(page) -> list:
     """
     Extracts all live matches from the currently visible LIVE tab.
-    Extends the standard extraction to capture scores and match minute.
+    Uses the actual Flashscore DOM structure with headerLeague__wrapper for
+    league grouping and event__match--live for match rows.
     """
     matches = await page.evaluate(r"""() => {
         const matches = [];
-        const container = document.querySelector('.sportName.soccer') || document.querySelector('#live-table');
+        // All elements live inside div.sportName.soccer (or the body if absent)
+        const container = document.querySelector('.sportName.soccer') || document.body;
         if (!container) return [];
 
-        let currentRegionLeague = 'Unknown';
+        // Collect all league headers and match rows in DOM order
+        const allElements = container.querySelectorAll(
+            '.headerLeague__wrapper, .event__match--live'
+        );
 
-        Array.from(container.children).forEach((el) => {
-            // League header
-            if (el.classList.contains('event__header')) {
-                const regionEl = el.querySelector('.event__title--type');
-                const leagueEl = el.querySelector('.event__title--name');
-                if (regionEl && leagueEl) {
-                    currentRegionLeague = regionEl.innerText.trim() + ' - ' + leagueEl.innerText.trim();
-                } else {
-                    currentRegionLeague = el.innerText.trim().replace(/[\r\n]+/g, ' - ');
-                }
+        let currentRegion = '';
+        let currentLeague = '';
+
+        allElements.forEach((el) => {
+            // League header: div.headerLeague__wrapper
+            if (el.classList.contains('headerLeague__wrapper')) {
+                const catEl = el.querySelector('.headerLeague__category-text');
+                const titleEl = el.querySelector('.headerLeague__title-text');
+                currentRegion = catEl ? catEl.innerText.trim() : '';
+                currentLeague = titleEl ? titleEl.innerText.trim() : '';
                 return;
             }
 
-            // Match row
-            if (el.classList.contains('event__match') && el.classList.contains('event__match--live')) {
+            // Live match row: div.event__match--live
+            if (el.classList.contains('event__match--live')) {
                 const rowId = el.getAttribute('id');
                 const cleanId = rowId ? rowId.replace('g_1_', '') : null;
                 if (!cleanId) return;
 
-                const homeEl = el.querySelector('.event__participant--home');
-                const awayEl = el.querySelector('.event__participant--away');
-                const homeScoreEl = el.querySelector('.event__score--home');
-                const awayScoreEl = el.querySelector('.event__score--away');
-                const timeEl = el.querySelector('.event__time');
+                // Team names via wcl-name within participant containers
+                const homeNameEl = el.querySelector('.event__homeParticipant .wcl-name_jjfMf');
+                const awayNameEl = el.querySelector('.event__awayParticipant .wcl-name_jjfMf');
+                // Scores via data-testid="wcl-matchRowScore"
+                const homeScoreEl = el.querySelector('span.event__score--home');
+                const awayScoreEl = el.querySelector('span.event__score--away');
+                // Match minute from event__stage--block
                 const stageEl = el.querySelector('.event__stage--block');
-                const linkEl = el.querySelector('a.eventRowLink') || el.querySelector('a');
+                // Detail link
+                const linkEl = el.querySelector('a.eventRowLink');
 
-                if (homeEl && awayEl) {
-                    const minute = (stageEl ? stageEl.innerText.trim() : '') || 
-                                   (timeEl ? timeEl.innerText.trim() : '');
+                if (homeNameEl && awayNameEl) {
+                    // Clean minute text — strip blinking character
+                    let minute = stageEl ? stageEl.innerText.trim().replace(/\s+/g, '') : '';
 
                     let status = 'live';
                     const minuteLower = minute.toLowerCase();
@@ -201,15 +209,19 @@ async def _extract_live_matches(page) -> list:
                     else if (minuteLower.includes('pen')) status = 'penalties';
                     else if (minuteLower.includes('et')) status = 'extra_time';
 
+                    const regionLeague = currentRegion
+                        ? currentRegion + ' - ' + currentLeague
+                        : currentLeague || 'Unknown';
+
                     matches.push({
                         fixture_id: cleanId,
-                        home_team: homeEl.innerText.trim(),
-                        away_team: awayEl.innerText.trim(),
+                        home_team: homeNameEl.innerText.trim(),
+                        away_team: awayNameEl.innerText.trim(),
                         home_score: homeScoreEl ? homeScoreEl.innerText.trim() : '0',
                         away_score: awayScoreEl ? awayScoreEl.innerText.trim() : '0',
                         minute: minute,
                         status: status,
-                        region_league: currentRegionLeague,
+                        region_league: regionLeague,
                         match_link: linkEl ? linkEl.getAttribute('href') : '',
                         timestamp: new Date().toISOString()
                     });
@@ -222,27 +234,20 @@ async def _extract_live_matches(page) -> list:
 
 
 async def _click_live_tab(page) -> bool:
-    """Clicks the LIVE tab on the Flashscore football page."""
+    """Clicks the LIVE tab on the Flashscore football page using the exact
+    data-analytics-alias attribute from knowledge.json."""
     try:
-        # Try common selectors for the LIVE tab
-        for selector in [
-            'a.filters__tab:has-text("LIVE")',
-            'button.filters__tab:has-text("LIVE")',
-            '.filters__tab--active:has-text("LIVE")',
-            'a[href*="live"]',
-            '.tabs__tab:has-text("LIVE")',
-        ]:
-            el = page.locator(selector).first
-            if await el.is_visible(timeout=2000):
-                await el.click()
-                await asyncio.sleep(2)
-                return True
+        tab = page.locator('.filters__tab[data-analytics-alias="live"]')
+        if await tab.count() > 0:
+            await tab.first.click()
+            await asyncio.sleep(2)
+            return True
     except Exception:
         pass
 
-    # Fallback: try text-based click
+    # Fallback: text-based click
     try:
-        await page.get_by_text("LIVE", exact=True).first.click()
+        await page.get_by_text("LIVE", exact=False).first.click()
         await asyncio.sleep(2)
         return True
     except Exception:
