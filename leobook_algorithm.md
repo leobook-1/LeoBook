@@ -1,6 +1,6 @@
-# LeoBook v2.8 Algorithm & Codebase Reference
+# LeoBook v2.9 Algorithm & Codebase Reference
 
-> **Version**: 2.8 · **Last Updated**: 2026-02-17 · **Architecture**: Clean Architecture (Orchestrator → Module → Data)
+> **Version**: 2.9 · **Last Updated**: 2026-02-18 · **Architecture**: Clean Architecture (Orchestrator → Module → Data)
 
 This document maps the **execution flow** of [Leo.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Leo.py) to specific files and functions. For the complete file inventory, see [LeoBook_Technical_Master_Report.md](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/LeoBook_Technical_Master_Report.md).
 
@@ -15,7 +15,8 @@ Leo.py (Orchestrator)
 ├── Prologue: Cloud Sync → Outcome Review → Enrichment → Accuracy → Final Sync
 ├── Chapter 1: Flashscore Extraction → AI Prediction → Odds Harvesting → Recommendations
 ├── Chapter 2: Automated Bet Placement → Withdrawal Management
-└── Chapter 3: Chief Engineer Oversight & Health Check
+├── Chapter 3: Chief Engineer Oversight & Health Check
+└── Live Streamer: Parallel 60s LIVE score streaming (asyncio.create_task)
 ```
 
 ---
@@ -128,6 +129,24 @@ Leo.py (Orchestrator)
 
 ---
 
+## Live Streamer (Parallel)
+
+**Objective**: Stream live scores every 60 seconds and propagate status changes to schedules + predictions.
+
+Runs in parallel with the main cycle via `asyncio.create_task()` at the Playwright level.
+
+1. [fs_live_streamer.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Modules/Flashscore/fs_live_streamer.py): `live_score_streamer()` — launches headless browser, clicks LIVE tab
+   - `_extract_live_matches()` — JavaScript evaluation to scrape live scores, minutes, statuses
+   - `_propagate_status_updates()` — updates `schedules.csv` and `predictions.csv`:
+     - Marks fixtures as `live` with current scores
+     - Detects finished matches (>2.5hrs past kickoff) and marks `finished`
+     - Computes `outcome_correct` for finished predictions
+   - [db_helpers.py](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/Data/Access/db_helpers.py): `save_live_score_entry()` — upserts to `live_scores.csv`
+   - Syncs to Supabase `live_scores` table via `SyncManager.batch_upsert()`
+   - Self-healing: page reload on extraction errors, full navigation reset on failures
+
+---
+
 ## Self-Healing & Resilience Layer (AIGO v5.0)
 
 This layer operates **globally across all chapters**. See [AIGO_Learning_Guide.md](file:///c:/Users/Admin/Desktop/ProProjection/LeoBook/AIGO_Learning_Guide.md) for the full 5-phase pipeline.
@@ -150,4 +169,4 @@ This layer operates **globally across all chapters**. See [AIGO_Learning_Guide.m
 ---
 
 **Chief Engineer**: Emenike Chinenye James
-**Source of Truth**: Refactored Clean Architecture (v2.8)
+**Source of Truth**: Refactored Clean Architecture (v2.9)

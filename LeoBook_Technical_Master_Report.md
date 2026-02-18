@@ -1,6 +1,6 @@
 # LeoBook — Technical Master Report
 
-> **Version**: 2.8 · **Last Updated**: 2026-02-17 · **Architecture**: Clean Architecture (Orchestrator → Module → Data)
+> **Version**: 2.9 · **Last Updated**: 2026-02-18 · **Architecture**: Clean Architecture (Orchestrator → Module → Data)
 
 ## Table of Contents
 
@@ -131,6 +131,7 @@ LeoBook is a **fully autonomous sports prediction and betting system** comprised
 | `fs_processor.py` | Processes individual matches: navigates to match page, extracts H2H/standings, runs AI prediction | ✅ (via `manager`) |
 | `fs_offline.py` | Offline reprediction mode — re-runs predictions on existing data without browser | ✅ (via `main_offline_repredict`) |
 | `fs_utils.py` | Retry extraction utility with exponential backoff | ✅ (via `enrich_all_schedules`, `fs_processor`) |
+| `fs_live_streamer.py` | Parallel live score streaming from Flashscore LIVE tab (60s interval) with status propagation to schedules/predictions | ✅ (via `asyncio.create_task` in `Leo.py`) |
 
 #### `Modules/FootballCom/` — Betting Platform Automation (12 files)
 
@@ -227,6 +228,7 @@ LeoBook is a **fully autonomous sports prediction and betting system** comprised
 | `profiles.csv` | CSV | User profiles |
 | `rule_config.json` | JSON | Rule engine configuration |
 | `rule_executions.csv` | CSV | Rule execution history |
+| `live_scores.csv` | CSV | Live match scores from Flashscore LIVE tab (updated every 60s by streamer) |
 
 #### `Data/Supabase/` — Cloud Database (2 files)
 
@@ -265,11 +267,11 @@ lib/
 │   │   ├── app_colors.dart            # Design system color tokens
 │   │   └── responsive_constants.dart  # Responsive breakpoints & scaling
 │   ├── theme/app_theme.dart           # Material 3 theme definition
-│   ├── utils/match_sorter.dart        # Match sorting/filtering logic
+│   ├── utils/match_sorter.dart        # Match sorting/filtering logic (4 tabs: ALL/LIVE/FINISHED/SCHEDULED)
 │   └── widgets/glass_container.dart   # Glassmorphism reusable widget
 ├── data/
 │   ├── models/                        # Freezed/JSON data models
-│   │   ├── match_model.dart           # Match prediction model
+│   │   ├── match_model.dart           # Match prediction model (isLive, isFinished getters, outcomeCorrect field)
 │   │   ├── news_model.dart            # News article model
 │   │   ├── recommendation_model.dart  # Bet recommendation model
 │   │   ├── rule_config_model.dart     # Rule engine config model
@@ -292,7 +294,7 @@ lib/
 └── presentation/
     ├── screens/
     │   ├── main_screen.dart           # Root scaffold with responsive nav
-    │   ├── home_screen.dart           # Home screen (mobile layout)
+    │   ├── home_screen.dart           # Home screen (mobile layout, 4 tabs: ALL/LIVE/FINISHED/SCHEDULED)
     │   ├── account_screen.dart        # User profile/settings
     │   ├── all_predictions_screen.dart # Full predictions list
     │   ├── league_screen.dart         # League detail with tabs

@@ -3,7 +3,7 @@
 **Developer**: Matterialless LLC
 **Chief Engineer**: Emenike Chinenye James
 **Powered by**: Grok 4.1 & Gemini 3
-**Architecture**: Clean Architecture v2.8 (Orchestrator → Module → Data)
+**Architecture**: Clean Architecture v2.9 (Orchestrator → Module → Data)
 
 ---
 
@@ -29,7 +29,8 @@ Leo.py (Orchestrator)
 ├── Prologue: Cloud Sync → Outcome Review → Enrichment → Accuracy
 ├── Chapter 1: Flashscore Extraction → AI Prediction → Odds Harvesting → Recommendations
 ├── Chapter 2: Automated Bet Placement → Withdrawal Management
-└── Chapter 3: Chief Engineer Oversight & Health Check
+├── Chapter 3: Chief Engineer Oversight & Health Check
+└── Live Streamer: Parallel 60s LIVE score streaming → status propagation
 ```
 
 ### Core Modules
@@ -37,7 +38,7 @@ Leo.py (Orchestrator)
 - **`Core/Intelligence/`** — AI prediction engine (ML model, rule engine, learning engine, AIGO self-healing)
 - **`Core/Browser/`** — Playwright automation and data extractors (H2H, standings, league pages)
 - **`Core/System/`** — Lifecycle, monitoring, withdrawal checker
-- **`Modules/Flashscore/`** — Schedule extraction, match processing, offline reprediction
+- **`Modules/Flashscore/`** — Schedule extraction, match processing, offline reprediction, **live score streaming**
 - **`Modules/FootballCom/`** — Betting platform automation (login, navigation, odds, booking, bet placement)
 - **`Data/Access/`** — CSV CRUD, Supabase sync, outcome review, accuracy calculation
 - **`Scripts/`** — Enrichment pipeline, recommendation engine, maintenance utilities
@@ -73,7 +74,7 @@ LeoBook/
 │   ├── System/             # Lifecycle, monitoring, withdrawal (4 files)
 │   └── Utils/              # Constants, page monitor, error logging (3 files)
 ├── Modules/
-│   ├── Flashscore/         # Sports data extraction (6 files)
+│   ├── Flashscore/         # Sports data extraction + live streamer (7 files)
 │   └── FootballCom/        # Betting platform automation (20 files)
 ├── Scripts/                # Enrichment pipeline + utilities (13 files)
 ├── Data/
@@ -97,6 +98,9 @@ Elite, cross-platform betting dashboard with:
 - **Offline Caching** — `shared_preferences` persistence for offline viewing
 - **Responsive Design** — `LayoutBuilder` breakpoints, proportional scaling, `Responsive` constants
 - **Material 3** — Dynamic color theming with dark mode
+- **Liquid Glass UI** — Premium frosted-glass containers, blur effects, performance toggle
+- **4-Tab Match System** — ALL | LIVE | FINISHED | SCHEDULED with mutually exclusive 2.5hr time rule
+- **Live Accuracy Tags** — Fed by `outcome_correct` column from predictions pipeline
 
 ---
 
@@ -150,6 +154,8 @@ flutter run -d chrome  # or: flutter run (mobile)
 ## Maintenance
 
 - Monitor `Data/Store/audit_log.csv` for real-time event transparency
+- Monitor `Data/Store/live_scores.csv` for live match streaming data
 - Use `python Scripts/recommend_bets.py --save` to manually generate recommendations
 - Use `python Scripts/enrich_all_schedules.py --limit 50` for targeted enrichment
 - Check Chapter 3 oversight reports in Supabase `audit_events` table
+- Live streamer runs automatically in parallel — check `[Streamer]` logs

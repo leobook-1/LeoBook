@@ -1,6 +1,6 @@
 # Supabase Sync — Technical Specification
 
-> **Version**: 2.8 · **Last Updated**: 2026-02-17 · **Status**: Fully Implemented & Automated
+> **Version**: 2.9 · **Last Updated**: 2026-02-18 · **Status**: Fully Implemented & Automated
 
 ## Overview
 
@@ -59,6 +59,7 @@ Supabase (cloud DB, consumed by Flutter app)
 | `region_league` | `league_id` | UPSERT | 1×/cycle |
 | `accuracy_reports` | `report_id` | UPSERT | 1×/cycle |
 | `audit_events` | `event_id` | INSERT only (append-only log) | On every event |
+| `live_scores` | `fixture_id` | UPSERT (latest timestamp wins) | Every 60s (streamer) |
 
 ---
 
@@ -123,7 +124,8 @@ ORDER BY created_at DESC LIMIT 5;
 SELECT 'predictions' as tbl, COUNT(*) as rows FROM predictions
 UNION ALL SELECT 'schedules', COUNT(*) FROM schedules
 UNION ALL SELECT 'standings', COUNT(*) FROM standings
-UNION ALL SELECT 'teams', COUNT(*) FROM teams;
+UNION ALL SELECT 'teams', COUNT(*) FROM teams
+UNION ALL SELECT 'live_scores', COUNT(*) FROM live_scores;
 ```
 
 ### Verify Freshness
