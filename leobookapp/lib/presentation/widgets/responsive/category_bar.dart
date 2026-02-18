@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/liquid_glass_theme.dart';
 import '../../../logic/cubit/home_cubit.dart';
 import 'leo_date_picker.dart';
 
@@ -129,10 +130,11 @@ class _CategoryBarState extends State<CategoryBar> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary : AppColors.desktopSearchFill,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius:
+              BorderRadius.circular(LiquidGlassTheme.borderRadiusSmall),
           border: isSelected
               ? null
-              : Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              : Border.all(color: LiquidGlassTheme.glassBorderDark),
         ),
         child: Center(
           child: Text(
@@ -168,8 +170,9 @@ class _CategoryBarState extends State<CategoryBar> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: AppColors.desktopSearchFill,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          borderRadius:
+              BorderRadius.circular(LiquidGlassTheme.borderRadiusSmall),
+          border: Border.all(color: LiquidGlassTheme.glassBorderDark),
         ),
         child: const Center(
           child: Row(

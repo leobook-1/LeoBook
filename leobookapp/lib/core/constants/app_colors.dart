@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 class AppColors {
   // ─── Brand ───────────────────────────────────────────────
   // ─── Brand ───────────────────────────────────────────────
-  static const Color primary = Color(0xFF137FEC); 
+  static const Color primary = Color(0xFF137FEC);
   static const Color electricBlue = primary;
 
   // ─── Backgrounds ─────────────────────────────────────────
   static const Color backgroundLight = Color(0xFFF6F7F8);
   static const Color backgroundDark = Color(0xFF101922);
   static const Color surfaceDark = Color(0xFF182430);
-  
+
   // ─── Desktop-Specific (Image Reference) ─────────────────
   static const Color desktopSidebarBg = Color(0xFF0D141C);
   static const Color desktopHeaderBg = Color(0xFF0F1720);
@@ -26,6 +26,15 @@ class AppColors {
   static const Color glassLight = Colors.white;
   static const Color glassBorderDark = Color(0xFF2C3E50);
   static const Color glassBorderLight = Color(0xFFE2E8F0);
+
+  // ─── Liquid Glass Tokens ────────────────────────────────
+  static const Color liquidGlassDark = Color(0xCC1A2332);
+  static const Color liquidGlassLight = Color(0xCCFFFFFF);
+  static const Color liquidGlassBorderDark = Color(0x1AFFFFFF);
+  static const Color liquidGlassBorderLight = Color(0x33FFFFFF);
+  static const Color liquidInnerGlow = Color(0x08FFFFFF);
+  static const Color bgGradientStart = Color(0xFF0D1620);
+  static const Color bgGradientEnd = Color(0xFF162232);
 
   // ─── States & Semantic ───────────────────────────────────
   static const Color liveRed = Color(0xFFFF3B30);

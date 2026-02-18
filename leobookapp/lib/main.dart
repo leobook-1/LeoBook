@@ -51,7 +51,7 @@ class LeoBookApp extends StatelessWidget {
           home: const MainScreen(),
           debugShowCheckedModeBanner: false,
           builder: (context, child) {
-            const double scale = 0.75;
+            const double scale = 1;
             final mq = MediaQuery.of(context);
             return Transform.scale(
               scale: scale,

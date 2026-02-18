@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:leobookapp/core/constants/app_colors.dart';
+import 'package:leobookapp/core/theme/liquid_glass_theme.dart';
 import 'package:leobookapp/core/constants/responsive_constants.dart';
 import 'package:leobookapp/presentation/screens/home_screen.dart';
 import 'package:leobookapp/presentation/screens/account_screen.dart';
@@ -128,25 +129,33 @@ class _MainScreenState extends State<MainScreen> {
 
             final screenWidth = constraints.maxWidth;
             return Scaffold(
-              extendBody: false,
-              body: scaffoldBody,
+              extendBody: true,
+              body: SafeArea(
+                bottom: false,
+                child: scaffoldBody,
+              ),
               bottomNavigationBar: Container(
                 color: Colors.transparent,
                 margin: Responsive.bottomNavMargin(screenWidth),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(40),
+                  borderRadius:
+                      BorderRadius.circular(LiquidGlassTheme.borderRadiusLarge),
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                    filter: ImageFilter.blur(
+                      sigmaX: LiquidGlassTheme.blurRadius,
+                      sigmaY: LiquidGlassTheme.blurRadius,
+                    ),
                     child: Container(
                       decoration: BoxDecoration(
                         color: isDark
-                            ? AppColors.cardDark.withValues(alpha: 0.95)
-                            : Colors.white.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(40),
+                            ? AppColors.cardDark.withValues(alpha: 0.85)
+                            : Colors.white.withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(
+                            LiquidGlassTheme.borderRadiusLarge),
                         border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Colors.black.withValues(alpha: 0.05),
+                          color: LiquidGlassTheme.glassBorder(
+                            Theme.of(context).brightness,
+                          ),
                         ),
                       ),
                       child: BottomNavigationBar(

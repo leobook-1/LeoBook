@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:leobookapp/logic/cubit/home_cubit.dart';
 import 'package:leobookapp/core/constants/app_colors.dart';
 import 'package:leobookapp/core/utils/match_sorter.dart';
+import 'package:leobookapp/core/animations/liquid_glass_animations.dart';
 import '../widgets/match_card.dart';
 import '../widgets/featured_carousel.dart';
 import '../widgets/news_feed.dart';
@@ -62,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen>
                   context.read<HomeCubit>().loadDashboard();
                 },
                 child: CustomScrollView(
+                  physics: liquidScrollPhysics,
                   slivers: [
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(

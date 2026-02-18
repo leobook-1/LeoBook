@@ -2,11 +2,16 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
+import '../theme/liquid_glass_theme.dart';
+import '../theme/glass_settings.dart';
 
-/// A reusable frosted-glass container inspired by Android 16's
-/// semi-transparent Material You surfaces.
+/// Premium frosted-glass container with Liquid Glass aesthetics.
 ///
-/// Features built-in hover (scale up) and click (scale down) animations.
+/// Features:
+/// - Configurable backdrop blur (respects performance settings)
+/// - Inner glow gradient for depth / refraction illusion
+/// - Hover (scale up) and press (scale down) micro-animations
+/// - Optional radial refraction shimmer via ShaderMask
 class GlassContainer extends StatefulWidget {
   final Widget child;
   final double borderRadius;
@@ -18,6 +23,7 @@ class GlassContainer extends StatefulWidget {
   final double borderWidth;
   final VoidCallback? onTap;
   final bool interactive;
+  final bool enableRefraction;
 
   const GlassContainer({
     super.key,
@@ -31,6 +37,7 @@ class GlassContainer extends StatefulWidget {
     this.borderWidth = 1.0,
     this.onTap,
     this.interactive = true,
+    this.enableRefraction = false,
   });
 
   @override
@@ -48,9 +55,10 @@ class _GlassContainerState extends State<GlassContainer> {
     // Calculate base colors
     Color fillColor =
         widget.color ?? (isDark ? AppColors.glassDark : AppColors.glassLight);
-    Color border =
-        widget.borderColor ??
-        (isDark ? AppColors.glassBorderDark : AppColors.glassBorderLight);
+    Color border = widget.borderColor ??
+        (isDark
+            ? AppColors.liquidGlassBorderDark
+            : AppColors.liquidGlassBorderLight);
 
     // Adjust for states if interactive
     double scale = 1.0;
@@ -68,6 +76,56 @@ class _GlassContainerState extends State<GlassContainer> {
       }
     }
 
+    final glassDecoration = BoxDecoration(
+      color: fillColor,
+      borderRadius: BorderRadius.circular(widget.borderRadius),
+      border: Border.all(
+        color: _isHovered ? AppColors.primary.withValues(alpha: 0.3) : border,
+        width: widget.borderWidth,
+      ),
+      boxShadow: [
+        // Inner glow for depth
+        BoxShadow(
+          color: LiquidGlassTheme.innerGlow(Theme.of(context).brightness),
+          blurRadius: 1,
+          spreadRadius: 0,
+          offset: const Offset(0, 1),
+        ),
+        // Outer subtle shadow
+        if (_isHovered)
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            blurRadius: 15,
+            spreadRadius: 2,
+          ),
+      ],
+    );
+
+    Widget glassChild = AnimatedContainer(
+      duration: LiquidGlassTheme.cardPressDuration,
+      padding: widget.padding,
+      decoration: glassDecoration,
+      child: widget.child,
+    );
+
+    // Refraction shimmer — subtle radial gradient overlay
+    if (widget.enableRefraction) {
+      glassChild = ShaderMask(
+        shaderCallback: (bounds) => RadialGradient(
+          center: const Alignment(-0.8, -0.8),
+          radius: 1.5,
+          colors: [
+            Colors.white.withValues(alpha: 0.06),
+            Colors.transparent,
+            Colors.white.withValues(alpha: 0.03),
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        ).createShader(bounds),
+        blendMode: BlendMode.srcOver,
+        child: glassChild,
+      );
+    }
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -83,42 +141,28 @@ class _GlassContainerState extends State<GlassContainer> {
         },
         child: AnimatedScale(
           scale: scale,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
+          duration: LiquidGlassTheme.cardPressDuration,
+          curve: LiquidGlassTheme.cardPressCurve,
           child: Container(
             margin: widget.margin,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(widget.borderRadius),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(
-                  sigmaX: widget.blurSigma,
-                  sigmaY: widget.blurSigma,
-                ),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: widget.padding,
-                  decoration: BoxDecoration(
-                    color: fillColor,
-                    borderRadius: BorderRadius.circular(widget.borderRadius),
-                    border: Border.all(
-                      color: _isHovered
-                          ? AppColors.primary.withValues(alpha: 0.3)
-                          : border,
-                      width: widget.borderWidth,
-                    ),
-                    boxShadow: _isHovered
-                        ? [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              blurRadius: 15,
-                              spreadRadius: 2,
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: widget.child,
-                ),
-              ),
+            child: Builder(
+              builder: (context) {
+                final sigma =
+                    GlassSettings.isBlurEnabled ? GlassSettings.blurSigma : 0.0;
+                final inner = ClipRRect(
+                  borderRadius: BorderRadius.circular(widget.borderRadius),
+                  child: sigma > 0
+                      ? BackdropFilter(
+                          filter: ImageFilter.blur(
+                            sigmaX: sigma,
+                            sigmaY: sigma,
+                          ),
+                          child: glassChild,
+                        )
+                      : glassChild,
+                );
+                return inner;
+              },
             ),
           ),
         ),

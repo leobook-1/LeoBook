@@ -307,6 +307,46 @@ def update_csv_file(file_path, data_map, key_field, headers):
     os.replace(temp_file, file_path)
     print(f"Updated {updated_count} rows and added {new_count} new rows in {file_path}")
 
+def find_best_match_league(input_name: str, country: str, existing_leagues: dict):
+    """
+    Match an input league name against existing league rows.
+    Returns (rl_id, is_new).
+    """
+    norm_input = normalize_for_search(input_name)
+    # Strip round/stage suffixes for matching: "TURKEY - 1. LIG - ROUND 22" → "turkey 1 lig"
+    norm_input_base = re.sub(r'\s*-?\s*(round|matchday|playoffs?|apertura|clausura|1/\d+-finals?|group\s*\w)\s*.*$', '', norm_input, flags=re.IGNORECASE).strip()
+
+    best_id = None
+    best_score = 0
+
+    for rl_id, row in existing_leagues.items():
+        existing_name = normalize_for_search(row.get("league", ""))
+        existing_country = (row.get("country") or "").strip().lower()
+
+        # Country must match if both are present
+        if country and existing_country and country.strip().lower() != existing_country:
+            continue
+
+        # Exact match
+        if norm_input_base == existing_name:
+            return rl_id, False
+
+        # Substring containment score
+        if norm_input_base and existing_name:
+            if norm_input_base in existing_name or existing_name in norm_input_base:
+                score = len(existing_name)
+                if score > best_score:
+                    best_score = score
+                    best_id = rl_id
+
+    if best_id:
+        return best_id, False
+
+    # No match — generate deterministic ID
+    new_id = generate_deterministic_id(input_name, country or "")
+    return new_id, True
+
+
 def main():
     if not os.path.exists(CSV_FILE):
         print(f"Error: {CSV_FILE} not found.")

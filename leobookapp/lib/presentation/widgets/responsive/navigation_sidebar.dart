@@ -1,5 +1,7 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/liquid_glass_theme.dart';
 
 class NavigationSideBar extends StatelessWidget {
   final int currentIndex;
@@ -18,66 +20,79 @@ class NavigationSideBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedSize(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOutCubic,
+      duration: LiquidGlassTheme.tabSwitchDuration,
+      curve: LiquidGlassTheme.tabSwitchCurve,
       child: IntrinsicWidth(
-        child: Container(
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            color: AppColors.surfaceDark,
-            border: Border(right: BorderSide(color: Colors.white10)),
-          ),
-          child: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints:
-                  BoxConstraints(minHeight: MediaQuery.of(context).size.height),
-              child: IntrinsicHeight(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildLogo(),
-                    const SizedBox(height: 32),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _NavItem(
-                            icon: Icons.home_rounded,
-                            label: "HOME",
-                            isActive: currentIndex == 0,
-                            isExpanded: isExpanded,
-                            onTap: () => onIndexChanged(0),
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: LiquidGlassTheme.blurRadiusMedium,
+              sigmaY: LiquidGlassTheme.blurRadiusMedium,
+            ),
+            child: Container(
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceDark.withValues(alpha: 0.85),
+                border: Border(
+                  right: BorderSide(
+                    color: LiquidGlassTheme.glassBorderDark,
+                  ),
+                ),
+              ),
+              child: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: MediaQuery.of(context).size.height,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildLogo(),
+                        const SizedBox(height: 32),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _NavItem(
+                                icon: Icons.home_rounded,
+                                label: "HOME",
+                                isActive: currentIndex == 0,
+                                isExpanded: isExpanded,
+                                onTap: () => onIndexChanged(0),
+                              ),
+                              _NavItem(
+                                icon: Icons.gavel_rounded,
+                                label: "RULES",
+                                isActive: currentIndex == 1,
+                                isExpanded: isExpanded,
+                                onTap: () => onIndexChanged(1),
+                              ),
+                              _NavItem(
+                                icon: Icons.emoji_events_rounded,
+                                label: "TOP",
+                                isActive: currentIndex == 2,
+                                isExpanded: isExpanded,
+                                onTap: () => onIndexChanged(2),
+                              ),
+                              _NavItem(
+                                icon: Icons.person_rounded,
+                                label: "PROFILE",
+                                isActive: currentIndex == 3,
+                                isExpanded: isExpanded,
+                                onTap: () => onIndexChanged(3),
+                              ),
+                            ],
                           ),
-                          _NavItem(
-                            icon: Icons.gavel_rounded,
-                            label: "RULES",
-                            isActive: currentIndex == 1,
-                            isExpanded: isExpanded,
-                            onTap: () => onIndexChanged(1),
-                          ),
-                          _NavItem(
-                            icon: Icons.emoji_events_rounded,
-                            label: "TOP",
-                            isActive: currentIndex == 2,
-                            isExpanded: isExpanded,
-                            onTap: () => onIndexChanged(2),
-                          ),
-                          _NavItem(
-                            icon: Icons.person_rounded,
-                            label: "PROFILE",
-                            isActive: currentIndex == 3,
-                            isExpanded: isExpanded,
-                            onTap: () => onIndexChanged(3),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const Spacer(),
+                        if (isExpanded) _buildProCard(),
+                        _buildToggleBtn(),
+                        const SizedBox(height: 16),
+                      ],
                     ),
-                    const Spacer(),
-                    if (isExpanded) _buildProCard(),
-                    _buildToggleBtn(),
-                    const SizedBox(height: 16),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -90,11 +105,13 @@ class NavigationSideBar extends StatelessWidget {
   Widget _buildToggleBtn() {
     return IconButton(
       onPressed: onToggle,
-      icon: Icon(
-        isExpanded
-            ? Icons.keyboard_double_arrow_left
-            : Icons.keyboard_double_arrow_right,
-        color: Colors.white54,
+      icon: AnimatedRotation(
+        turns: isExpanded ? 0.0 : 0.5,
+        duration: LiquidGlassTheme.tabSwitchDuration,
+        child: const Icon(
+          Icons.keyboard_double_arrow_left,
+          color: Colors.white54,
+        ),
       ),
     );
   }
@@ -127,9 +144,9 @@ class NavigationSideBar extends StatelessWidget {
             ),
             if (isExpanded) ...[
               const SizedBox(width: 8),
-              Text(
+              const Text(
                 "LEOBOOK",
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
@@ -152,8 +169,9 @@ class NavigationSideBar extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.backgroundDark,
-          borderRadius: BorderRadius.circular(20),
+          color: AppColors.backgroundDark.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(LiquidGlassTheme.borderRadius),
+          border: Border.all(color: LiquidGlassTheme.glassBorderDark),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,7 +236,6 @@ class _NavItemState extends State<_NavItem> {
   bool _isHovered = false;
 
   @override
-  @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -228,7 +245,8 @@ class _NavItemState extends State<_NavItem> {
         child: GestureDetector(
           onTap: widget.onTap,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: LiquidGlassTheme.cardPressDuration,
+            curve: LiquidGlassTheme.cardPressCurve,
             padding: EdgeInsets.symmetric(
               horizontal: widget.isExpanded ? 16 : 12,
               vertical: 12,
@@ -239,11 +257,15 @@ class _NavItemState extends State<_NavItem> {
                   : (_isHovered
                       ? Colors.white.withValues(alpha: 0.05)
                       : Colors.transparent),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(
+                LiquidGlassTheme.borderRadiusSmall,
+              ),
               border: Border.all(
                 color: widget.isActive
                     ? AppColors.primary.withValues(alpha: 0.5)
-                    : Colors.transparent,
+                    : (_isHovered
+                        ? LiquidGlassTheme.glassBorderDark
+                        : Colors.transparent),
               ),
             ),
             child: FittedBox(
