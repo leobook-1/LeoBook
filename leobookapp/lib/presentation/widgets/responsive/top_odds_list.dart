@@ -8,11 +8,6 @@ class TopOddsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardW = Responsive.cardWidth(MediaQuery.sizeOf(context).width,
-        minWidth: 180, maxWidth: 300);
-    final listH = Responsive.listHeight(MediaQuery.sizeOf(context).width,
-        min: 130, max: 200);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -55,13 +50,16 @@ class TopOddsList extends StatelessWidget {
           ],
         ),
         SizedBox(height: Responsive.sp(context, 10)),
-        SizedBox(
-          height: listH,
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: Responsive.sp(context, 140),
+            maxHeight: Responsive.sp(context, 180),
+          ),
           child: ListView(
             scrollDirection: Axis.horizontal,
-            children: [
+            clipBehavior: Clip.none,
+            children: const [
               _OddsCard(
-                cardWidth: cardW,
                 title: "Man City to Win & Haaland to Score",
                 wasOdds: "2.10",
                 nowOdds: "2.50",
@@ -70,25 +68,22 @@ class TopOddsList extends StatelessWidget {
                 color: AppColors.warning,
               ),
               _OddsCard(
-                cardWidth: cardW,
                 title: "Lakers to make Western Conf. Finals",
                 wasOdds: "3.50",
                 nowOdds: "4.20",
                 badge: "HOT PICK",
                 type: "NBA FUTURES",
-                color: const Color(0xFFF97316),
+                color: Color(0xFFF97316),
               ),
               _OddsCard(
-                cardWidth: cardW,
                 title: "Alcaraz to Win French Open '24",
                 wasOdds: "2.75",
                 nowOdds: "3.10",
                 badge: "VALUE",
                 type: "GRAND SLAM",
-                color: const Color(0xFFEAB308),
+                color: Color(0xFFEAB308),
               ),
               _OddsCard(
-                cardWidth: cardW,
                 title: "Caleb Williams #1 Overall Pick",
                 wasOdds: "1.05",
                 nowOdds: "1.15",
@@ -105,7 +100,6 @@ class TopOddsList extends StatelessWidget {
 }
 
 class _OddsCard extends StatefulWidget {
-  final double cardWidth;
   final String title;
   final String wasOdds;
   final String nowOdds;
@@ -114,7 +108,6 @@ class _OddsCard extends StatefulWidget {
   final Color color;
 
   const _OddsCard({
-    required this.cardWidth,
     required this.title,
     required this.wasOdds,
     required this.nowOdds,
@@ -135,135 +128,140 @@ class _OddsCardState extends State<_OddsCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: widget.cardWidth,
-        margin: EdgeInsets.only(right: Responsive.sp(context, 10)),
-        padding: EdgeInsets.all(Responsive.sp(context, 12)),
-        decoration: BoxDecoration(
-          color: AppColors.desktopSearchFill.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(Responsive.sp(context, 14)),
-          border: Border.all(
-            color: _isHovered
-                ? widget.color.withValues(alpha: 0.3)
-                : Colors.white.withValues(alpha: 0.05),
-            width: 0.5,
-          ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: Responsive.sp(context, 160),
+          maxWidth: Responsive.sp(context, 240),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: Responsive.sp(context, 5),
-                        height: Responsive.sp(context, 5),
-                        decoration: BoxDecoration(
-                          color: widget.color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      SizedBox(width: Responsive.sp(context, 4)),
-                      Flexible(
-                        child: Text(
-                          widget.type,
-                          style: TextStyle(
-                            fontSize: Responsive.sp(context, 7),
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.textGrey,
-                            letterSpacing: 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: EdgeInsets.only(right: Responsive.sp(context, 10)),
+          padding: EdgeInsets.all(Responsive.sp(context, 12)),
+          decoration: BoxDecoration(
+            color: AppColors.desktopSearchFill.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(Responsive.sp(context, 14)),
+            border: Border.all(
+              color: _isHovered
+                  ? widget.color.withValues(alpha: 0.3)
+                  : Colors.white.withValues(alpha: 0.05),
+              width: 0.5,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: Responsive.sp(context, 5),
+                          height: Responsive.sp(context, 5),
+                          decoration: BoxDecoration(
+                            color: widget.color,
+                            shape: BoxShape.circle,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: Responsive.sp(context, 5),
-                    vertical: Responsive.sp(context, 2),
-                  ),
-                  decoration: BoxDecoration(
-                    color: widget.color.withValues(alpha: 0.1),
-                    borderRadius:
-                        BorderRadius.circular(Responsive.sp(context, 4)),
-                  ),
-                  child: Text(
-                    widget.badge,
-                    style: TextStyle(
-                      fontSize: Responsive.sp(context, 6),
-                      fontWeight: FontWeight.w900,
-                      color: widget.color,
-                      letterSpacing: 0.5,
+                        SizedBox(width: Responsive.sp(context, 4)),
+                        Flexible(
+                          child: Text(
+                            widget.type,
+                            style: TextStyle(
+                              fontSize: Responsive.sp(context, 7),
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textGrey,
+                              letterSpacing: 1.0,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-            SizedBox(height: Responsive.sp(context, 8)),
-            Expanded(
-              child: Text(
-                widget.title,
-                style: TextStyle(
-                  fontSize: Responsive.sp(context, 11),
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  height: 1.2,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: Responsive.sp(context, 5),
+                      vertical: Responsive.sp(context, 2),
+                    ),
+                    decoration: BoxDecoration(
+                      color: widget.color.withValues(alpha: 0.1),
+                      borderRadius:
+                          BorderRadius.circular(Responsive.sp(context, 4)),
+                    ),
+                    child: Text(
+                      widget.badge,
+                      style: TextStyle(
+                        fontSize: Responsive.sp(context, 6),
+                        fontWeight: FontWeight.w900,
+                        color: widget.color,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            SizedBox(height: Responsive.sp(context, 6)),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "WAS ${widget.wasOdds}",
-                        style: TextStyle(
-                          fontSize: Responsive.sp(context, 7),
-                          color: Colors.white.withValues(alpha: 0.3),
-                          fontWeight: FontWeight.w700,
-                          decoration: TextDecoration.lineThrough,
-                        ),
-                      ),
-                      SizedBox(height: Responsive.sp(context, 2)),
-                      Text(
-                        "ODDS",
-                        style: TextStyle(
-                          fontSize: Responsive.sp(context, 8),
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  widget.nowOdds,
+              SizedBox(height: Responsive.sp(context, 8)),
+              Expanded(
+                child: Text(
+                  widget.title,
                   style: TextStyle(
-                    fontSize: Responsive.sp(context, 18),
-                    fontWeight: FontWeight.w900,
-                    color: widget.color,
-                    fontStyle: FontStyle.italic,
-                    height: 1,
+                    fontSize: Responsive.sp(context, 11),
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    height: 1.2,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-          ],
+              ),
+              SizedBox(height: Responsive.sp(context, 6)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "WAS ${widget.wasOdds}",
+                          style: TextStyle(
+                            fontSize: Responsive.sp(context, 7),
+                            color: Colors.white.withValues(alpha: 0.3),
+                            fontWeight: FontWeight.w700,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                        SizedBox(height: Responsive.sp(context, 2)),
+                        Text(
+                          "ODDS",
+                          style: TextStyle(
+                            fontSize: Responsive.sp(context, 8),
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    widget.nowOdds,
+                    style: TextStyle(
+                      fontSize: Responsive.sp(context, 18),
+                      fontWeight: FontWeight.w900,
+                      color: widget.color,
+                      fontStyle: FontStyle.italic,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

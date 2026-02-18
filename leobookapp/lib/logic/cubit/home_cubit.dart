@@ -134,6 +134,10 @@ class HomeCubit extends Cubit<HomeState> {
 
       // --- Start Realtime Subscriptions ---
       _predictionsSub?.cancel();
+      _liveScoresSub?.cancel();
+      _predictionsSub = null;
+      _liveScoresSub = null;
+
       _predictionsSub = _dataRepository
           .watchPredictions(date: selectionDate)
           .listen((updatedMatches) {
@@ -142,7 +146,6 @@ class HomeCubit extends Cubit<HomeState> {
         debugPrint("Predictions Stream Error: $e");
       });
 
-      _liveScoresSub?.cancel();
       _liveScoresSub = _dataRepository.watchLiveScores().listen((liveUpdates) {
         _handleRealtimeUpdate(liveUpdates);
       }, onError: (e) {
@@ -276,6 +279,13 @@ class HomeCubit extends Cubit<HomeState> {
 
       // Re-subscribe for the new date
       _predictionsSub?.cancel();
+      _predictionsSub = null; // Ensure clear
+
+      // Delay slightly to allow the previous channel to leave cleanly
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      if (isClosed) return;
+
       _predictionsSub =
           _dataRepository.watchPredictions(date: date).listen((updatedMatches) {
         _handleRealtimeUpdate(updatedMatches);
@@ -476,9 +486,24 @@ class HomeCubit extends Cubit<HomeState> {
   }
 
   @override
-  Future<void> close() {
-    _predictionsSub?.cancel();
-    _liveScoresSub?.cancel();
+  Future<void> close() async {
+    try {
+      if (_predictionsSub != null) {
+        await _predictionsSub!.cancel();
+        _predictionsSub = null;
+      }
+    } catch (e) {
+      debugPrint("Error canceling predictions sub: $e");
+    }
+
+    try {
+      if (_liveScoresSub != null) {
+        await _liveScoresSub!.cancel();
+        _liveScoresSub = null;
+      }
+    } catch (e) {
+      debugPrint("Error canceling live scores sub: $e");
+    }
     return super.close();
   }
 }

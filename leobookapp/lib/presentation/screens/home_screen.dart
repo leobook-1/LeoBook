@@ -14,6 +14,7 @@ import '../widgets/responsive/category_bar.dart';
 import '../widgets/responsive/top_odds_list.dart';
 import '../../logic/cubit/search_cubit.dart';
 import 'search_screen.dart';
+import '../widgets/responsive/accuracy_report_card.dart';
 import '../../core/theme/liquid_glass_theme.dart';
 import '../widgets/footnote_section.dart';
 
@@ -68,72 +69,90 @@ class _HomeScreenState extends State<HomeScreen>
                 child: CustomScrollView(
                   physics: liquidScrollPhysics,
                   slivers: [
-                    SliverPersistentHeader(
+                    SliverAppBar(
                       pinned: true,
-                      delegate: _CategoryHeaderDelegate(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                      floating: false,
+                      elevation: 0,
+                      backgroundColor: Colors.transparent,
+                      expandedHeight: 0,
+                      toolbarHeight: Responsive.sp(context, 32),
+                      centerTitle: false,
+                      title: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: hp),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Top Row: App Name + Search (Padded)
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: hp),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    "LEOBOOK",
-                                    style: TextStyle(
-                                      fontSize: Responsive.sp(context, 12),
-                                      fontWeight: FontWeight.w900,
-                                      color: isDark
-                                          ? Colors.white
-                                          : AppColors.textDark,
-                                      letterSpacing: 2.0,
-                                    ),
-                                  ),
-                                  GestureDetector(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => BlocProvider.value(
-                                            value: context.read<SearchCubit>(),
-                                            child: const SearchScreen(),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      padding: EdgeInsets.all(
-                                          Responsive.sp(context, 6)),
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? Colors.white
-                                                .withValues(alpha: 0.05)
-                                            : Colors.black
-                                                .withValues(alpha: 0.05),
-                                        borderRadius: BorderRadius.circular(
-                                            Responsive.sp(context, 8)),
-                                      ),
-                                      child: Icon(
-                                        Icons.search_rounded,
-                                        color: isDark
-                                            ? Colors.white70
-                                            : Colors.black54,
-                                        size: Responsive.sp(context, 15),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                            Text(
+                              "LEOBOOK",
+                              style: TextStyle(
+                                fontSize: Responsive.sp(context, 12),
+                                fontWeight: FontWeight.w900,
+                                color:
+                                    isDark ? Colors.white : AppColors.textDark,
+                                letterSpacing: 2.0,
                               ),
                             ),
-                            SizedBox(height: Responsive.sp(context, 4)),
-                            // Bottom Row: Category Bar (Edge-to-Edge)
-                            const CategoryBar(),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BlocProvider.value(
+                                      value: context.read<SearchCubit>(),
+                                      child: const SearchScreen(),
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding:
+                                    EdgeInsets.all(Responsive.sp(context, 6)),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.05)
+                                      : Colors.black.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(
+                                      Responsive.sp(context, 8)),
+                                ),
+                                child: Icon(
+                                  Icons.search_rounded,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black54,
+                                  size: Responsive.sp(context, 15),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
-                        isDark: isDark,
+                      ),
+                      bottom: PreferredSize(
+                        preferredSize:
+                            Size.fromHeight(Responsive.sp(context, 44)),
+                        child: const CategoryBar(),
+                      ),
+                      flexibleSpace: ClipRect(
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(
+                            sigmaX: LiquidGlassTheme.blurRadiusMedium,
+                            sigmaY: LiquidGlassTheme.blurRadiusMedium,
+                          ),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: (isDark
+                                      ? AppColors.backgroundDark
+                                      : AppColors.backgroundLight)
+                                  .withValues(alpha: 0.35),
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: isDark
+                                      ? Colors.white10
+                                      : Colors.black.withValues(alpha: 0.04),
+                                  width: 1.0,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     SliverPadding(
@@ -153,6 +172,8 @@ class _HomeScreenState extends State<HomeScreen>
                           children: [
                             SizedBox(height: Responsive.sp(context, 10)),
                             const TopOddsList(),
+                            SizedBox(height: Responsive.sp(context, 12)),
+                            const AccuracyReportCard(),
                             SizedBox(height: Responsive.sp(context, 10)),
                           ],
                         ),
@@ -183,11 +204,17 @@ class _HomeScreenState extends State<HomeScreen>
                           dividerColor: Colors.transparent,
                           labelPadding: EdgeInsets.symmetric(
                               horizontal: Responsive.sp(context, 4)),
-                          tabs: const [
-                            Tab(text: "ALL"),
-                            Tab(text: "LIVE"),
-                            Tab(text: "FINISHED"),
-                            Tab(text: "SCHEDULED"),
+                          tabs: [
+                            Tab(text: "ALL (${state.filteredMatches.length})"),
+                            Tab(
+                                text:
+                                    "LIVE (${state.filteredMatches.where((m) => m.isLive).length})"),
+                            Tab(
+                                text:
+                                    "FINISHED (${state.filteredMatches.where((m) => m.isFinished).length})"),
+                            Tab(
+                                text:
+                                    "SCHEDULED (${state.filteredMatches.where((m) => !m.isLive && !m.isFinished).length})"),
                           ],
                         ),
                         isDark,
@@ -358,9 +385,9 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   _StickyTabBarDelegate(this._tabBar, this.isDark);
 
   @override
-  double get minExtent => _tabBar.preferredSize.height + 1;
+  double get minExtent => 50.0;
   @override
-  double get maxExtent => _tabBar.preferredSize.height + 1;
+  double get maxExtent => 50.0;
 
   @override
   Widget build(
@@ -369,9 +396,12 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
     bool overlapsContent,
   ) {
     final hp = Responsive.horizontalPadding(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: hp),
       color: Colors.transparent,
+      height: 50.0,
       child: Stack(
         children: [
           ClipRRect(
@@ -384,6 +414,7 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
                 sigmaY: LiquidGlassTheme.blurRadiusMedium,
               ),
               child: Container(
+                height: 50.0,
                 decoration: BoxDecoration(
                   color: (isDark
                           ? AppColors.backgroundDark
@@ -395,15 +426,15 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
                   border: Border(
                     top: BorderSide(
                       color: Colors.white.withValues(alpha: 0.1),
-                      width: 0.5,
+                      width: 1.0, // Solid 1px to avoid fractional gaps
                     ),
                     left: BorderSide(
                       color: Colors.white.withValues(alpha: 0.1),
-                      width: 0.5,
+                      width: 1.0,
                     ),
                     right: BorderSide(
                       color: Colors.white.withValues(alpha: 0.1),
-                      width: 0.5,
+                      width: 1.0,
                     ),
                   ),
                 ),
@@ -419,62 +450,5 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_StickyTabBarDelegate oldDelegate) {
     return false;
-  }
-}
-
-class _CategoryHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final Widget child;
-  final bool isDark;
-
-  _CategoryHeaderDelegate({
-    required this.child,
-    required this.isDark,
-  });
-
-  @override
-  double get minExtent => 100.0; // Adjusted for padding and spacing
-  @override
-  double get maxExtent => 100.0;
-
-  // We rewrite to use context in the builder
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: LiquidGlassTheme.blurRadiusMedium,
-          sigmaY: LiquidGlassTheme.blurRadiusMedium,
-        ),
-        child: Container(
-          padding: EdgeInsets.only(
-            top: MediaQuery.paddingOf(context).top + Responsive.sp(context, 8),
-            bottom: Responsive.sp(context, 4),
-          ),
-          decoration: BoxDecoration(
-            color:
-                (isDark ? AppColors.backgroundDark : AppColors.backgroundLight)
-                    .withValues(alpha: 0.35),
-            border: Border(
-              bottom: BorderSide(
-                color: isDark
-                    ? Colors.white10
-                    : Colors.black.withValues(alpha: 0.04),
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(_CategoryHeaderDelegate oldDelegate) {
-    return isDark != oldDelegate.isDark;
   }
 }
