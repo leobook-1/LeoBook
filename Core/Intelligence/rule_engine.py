@@ -40,6 +40,10 @@ class RuleEngine:
         if not home_team or not away_team:
             return {"type": "SKIP", "confidence": "Low", "reason": "Missing teams"}
 
+        # Scope filtering: skip matches outside this engine's scope
+        if not config.matches_scope(region_league, home_team, away_team):
+            return {"type": "SKIP", "confidence": "Low", "reason": "Outside engine scope"}
+
         home_form = [m for m in h2h_data.get("home_last_10_matches", []) if m][:10]
         away_form = [m for m in h2h_data.get("away_last_10_matches", []) if m][:10]
         h2h_raw = h2h_data.get("head_to_head", [])
@@ -79,8 +83,8 @@ class RuleEngine:
         ml_features = MLModel.prepare_features(vision_data)
         ml_prediction = MLModel.predict(ml_features) if ml_features else {"confidence": 0.5, "prediction": "UNKNOWN"}
 
-        # --- LOAD REGION-SPECIFIC WEIGHTS ---
-        weights = LearningEngine.load_weights(region_league)
+        # --- LOAD REGION-SPECIFIC WEIGHTS (engine-aware) ---
+        weights = LearningEngine.load_weights(region_league, engine_id=config.id)
 
         # Weighted rule voting using learned weights
         home_score = away_score = draw_score = over25_score = 0
@@ -167,9 +171,8 @@ class RuleEngine:
         )
 
         
-        # --- SELECTION STRATEGY: SAFETY FIRST ---
-        # We assume "conservative" risk preference to prioritize Double Chance, Over 1.5, etc.
-        selection = BettingMarkets.select_best_market(betting_markets, risk_preference="conservative")
+        # --- SELECTION STRATEGY: Use config's risk preference ---
+        selection = BettingMarkets.select_best_market(betting_markets, risk_preference=config.risk_preference)
         
         best_prediction = None
         if selection:

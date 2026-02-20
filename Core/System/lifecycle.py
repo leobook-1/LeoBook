@@ -114,6 +114,13 @@ Examples:
   python Leo.py --review                   Run outcome review only
   python Leo.py --backtest                 Run single-pass backtest
   python Leo.py --offline-repredict        Offline reprediction mode
+  python Leo.py --streamer                 Run live score streamer
+  python Leo.py --rule-engine              Show default rule engine + accuracy
+  python Leo.py --rule-engine --list       List all saved rule engines
+  python Leo.py --rule-engine --backtest   Progressive backtest default engine
+  python Leo.py --rule-engine --backtest --id ENGINE_ID   Backtest a specific engine
+  python Leo.py --rule-engine --backtest --from-date 2025-08-01   Set start date
+  python Leo.py --rule-engine --set-default "James' Law"   Set engine as default
         """
     )
     # --- Granular Chapter / Page Selection ---
@@ -139,10 +146,28 @@ Examples:
                        help='Run a single-pass backtest check')
     parser.add_argument('--offline-repredict', action='store_true',
                        help='Run offline reprediction using stored data')
+    parser.add_argument('--streamer', action='store_true',
+                       help='Run the live score streamer independently')
+
+    # --- Rule Engine Management ---
+    parser.add_argument('--rule-engine', action='store_true',
+                       help='Show default rule engine info (combine with --list, --set-default, --backtest)')
+    parser.add_argument('--list', action='store_true',
+                       help='List all saved rule engines (use with --rule-engine)')
+    parser.add_argument('--set-default', type=str, metavar='NAME',
+                       help='Set a rule engine as default by name or ID (use with --rule-engine)')
+    parser.add_argument('--id', type=str, metavar='ENGINE_ID',
+                       help='Target a specific engine by ID (use with --rule-engine --backtest)')
+    parser.add_argument('--from-date', type=str, metavar='DATE',
+                       help='Start date for backtest YYYY-MM-DD (use with --rule-engine --backtest)')
 
     # --- Validation ---
     args = parser.parse_args()
     if args.page and not args.prologue and args.chapter is None:
         parser.error("--page requires --prologue or --chapter")
+    if args.list and not args.rule_engine:
+        parser.error("--list requires --rule-engine")
+    if args.set_default and not args.rule_engine:
+        parser.error("--set-default requires --rule-engine")
     return args
 

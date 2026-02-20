@@ -24,6 +24,13 @@ class LearningEngine:
     """Self-learning component that analyzes prediction performance and adjusts weights per region/league."""
 
     LEARNING_DB = "Data/Store/learning_weights.json"
+
+    @staticmethod
+    def _db_path(engine_id: str = "default") -> str:
+        """Get the learning weights file path for a specific engine."""
+        if engine_id == "default":
+            return LearningEngine.LEARNING_DB
+        return f"Data/Store/learning_weights_{engine_id}.json"
     
     # Map text reasons back to rule keys for learning attribution
     REASON_TO_RULE_MAP = {
@@ -67,15 +74,16 @@ class LearningEngine:
     }
 
     @staticmethod
-    def load_weights(region_league: str = "GLOBAL") -> Dict[str, Any]:
+    def load_weights(region_league: str = "GLOBAL", engine_id: str = "default") -> Dict[str, Any]:
         """
-        Load learned weights for a specific region/league.
+        Load learned weights for a specific region/league and engine.
         Falls back to GLOBAL if specific weights don't exist.
         """
+        db_path = LearningEngine._db_path(engine_id)
         all_weights = {}
-        if os.path.exists(LearningEngine.LEARNING_DB):
+        if os.path.exists(db_path):
             try:
-                with open(LearningEngine.LEARNING_DB, 'r') as f:
+                with open(db_path, 'r') as f:
                     all_weights = json.load(f)
             except:
                 pass
@@ -109,10 +117,11 @@ class LearningEngine:
         return merged
 
     @staticmethod
-    def save_all_weights(all_weights: Dict[str, Any]):
+    def save_all_weights(all_weights: Dict[str, Any], engine_id: str = "default"):
         """Save the entire weights dictionary to file."""
+        db_path = LearningEngine._db_path(engine_id)
         os.makedirs("Data/Store", exist_ok=True)
-        with open(LearningEngine.LEARNING_DB, 'w') as f:
+        with open(db_path, 'w') as f:
             json.dump(all_weights, f, indent=2)
 
     @staticmethod
@@ -170,16 +179,17 @@ class LearningEngine:
         return dict(performance), dict(conf_performance)
 
     @staticmethod
-    def update_weights() -> Dict[str, Any]:
+    def update_weights(engine_id: str = "default") -> Dict[str, Any]:
         """
         Update learning weights based on historical performance for each league.
         """
         rule_perf, conf_perf = LearningEngine.analyze_performance()
         
         # Load existing (or init new structure)
-        if os.path.exists(LearningEngine.LEARNING_DB):
+        db_path = LearningEngine._db_path(engine_id)
+        if os.path.exists(db_path):
             try:
-                with open(LearningEngine.LEARNING_DB, 'r') as f:
+                with open(db_path, 'r') as f:
                     all_weights = json.load(f)
                 # Migration check
                 if "h2h_home_win" in all_weights:
@@ -231,5 +241,5 @@ class LearningEngine:
                         new_cal = (current_cal * 0.9) + (actual_acc * 0.1)
                         league_weights["confidence_calibration"][level] = round(new_cal, 3)
 
-        LearningEngine.save_all_weights(all_weights)
+        LearningEngine.save_all_weights(all_weights, engine_id=engine_id)
         return all_weights

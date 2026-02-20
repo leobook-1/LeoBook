@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS public.custom_rules (
 
 ALTER TABLE public.custom_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.custom_rules ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE public.custom_rules ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT false;
+ALTER TABLE public.custom_rules ADD COLUMN IF NOT EXISTS scope JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.custom_rules ADD COLUMN IF NOT EXISTS accuracy JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.custom_rules ADD COLUMN IF NOT EXISTS backtest_csv_url TEXT;
 
 -- Idempotent Policies for custom_rules
 DROP POLICY IF EXISTS "Users can fully manage own rules" ON public.custom_rules;

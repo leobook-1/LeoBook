@@ -1,20 +1,20 @@
-id,timestamp,event_type,description,balance_before,balance_after,stake,status
-21452d30-7418-482c-a538-94042195f438,2026-02-17 00:02:10,CYCLE_START,Cycle #1 initiated.,,,,success
-dbb2be6c-b5fa-4d18-bf7b-2c33955f3608,2026-02-16T21:29:40+00:00,CYCLE_START,Cycle #1 initiated.,None,None,None,success
-2cbd0582-217b-476d-9c12-727ee5fb28a1,2026-02-16T22:27:57+00:00,CYCLE_START,Cycle #1 initiated.,None,None,None,success
-2be062eb-2fda-40b3-b8b4-19543037e6c4,2026-02-17 00:18:48,CYCLE_START,Cycle #1 initiated.,,,,success
-af894938-9e3e-4f2d-8813-68a1e4cc59a7,2026-02-17 00:23:27,PROLOGUE_P1,"Failed: {'message': 'invalid input syntax for type uuid: ""success""', 'code': '22P02', 'hint': None, 'details': None}",,,,failed
-8c7d79c2-8912-4388-85e8-7e2784c42b06,2026-02-17 00:27:25,PROLOGUE_P2,"Failed: {'message': 'invalid input syntax for type uuid: ""failed""', 'code': '22P02', 'hint': None, 'details': None}",,,,failed
-c975d376-c83a-4b41-bdd3-df9a6ac3235b,2026-02-17 00:31:22,SYSTEM_SYNC,"Full Chapter Sync (Prologue Final): 10 passed, 1 failed. Errors: audit_log: {'message': 'invalid input syntax for type uuid: ""failed""', 'code': '22P02', 'hint': None, 'details': None}",,,,partial_failure
-92105c62-af0b-4578-8a9e-2788ce00e64c,2026-02-17 00:31:22,PROLOGUE_P3,Accuracy generated and Prologue sync completed.,,,,success
-a3c88fdb-cec2-4c88-9133-82d8c830f7ea,2026-02-17 00:35:56,CH1_P1,Flashscore extraction and analysis completed.,,,,success
-c1e66e26-d359-45d3-8910-58460cdafb39,2026-02-17 00:37:32,CH1_P2,Odds harvesting and URL resolution completed.,,,,success
-3737dc00-1d3d-4dac-aa5c-f4be5ff36982,2026-02-17 00:41:15,SYSTEM_SYNC,"Full Chapter Sync (Chapter 1 Final): 10 passed, 1 failed. Errors: audit_log: {'message': 'invalid input syntax for type uuid: ""failed""', 'code': '22P02', 'hint': None, 'details': None}",,,,partial_failure
-845f4a71-c005-4fc1-9039-77ef80dcc941,2026-02-17 00:41:15,CH1_P3_SYNC,Sync parity issues detected.,,,,partial_failure
-50c5bbd7-e7dd-4475-83cc-da508ac3901b,2026-02-17 00:41:20,CH1_P3,Final sync and recommendations completed.,,,,success
-e0fab3ae-9791-4b99-b22d-46a0c48f4ce5,2026-02-17 00:41:20,CH2_P1,Automated booking phase completed.,,,,success
-6f393611-8518-4eb2-9ae9-608000fb8701,2026-02-17 00:41:43,CH2_P2,Withdrawal check completed. Balance: 0.0,,,,success
-befe5df3-1281-471b-9171-8f708889c481,2026-02-17 00:41:44,OVERSIGHT_REPORT,"═══ Chief Engineer Oversight Report ═══
+id,timestamp,event_type,description,balance_before,balance_after,stake,status,updated_at,last_updated
+21452d30-7418-482c-a538-94042195f438,2026-02-17T00:02:10+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+dbb2be6c-b5fa-4d18-bf7b-2c33955f3608,2026-02-16T21:29:40+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+2cbd0582-217b-476d-9c12-727ee5fb28a1,2026-02-16T22:27:57+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+2be062eb-2fda-40b3-b8b4-19543037e6c4,2026-02-17T00:18:48+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+af894938-9e3e-4f2d-8813-68a1e4cc59a7,2026-02-17T00:23:27+00:00,PROLOGUE_P1,"Failed: {'message': 'invalid input syntax for type uuid: ""success""', 'code': '22P02', 'hint': None, 'details': None}",,,,failed,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+8c7d79c2-8912-4388-85e8-7e2784c42b06,2026-02-17T00:27:25+00:00,PROLOGUE_P2,"Failed: {'message': 'invalid input syntax for type uuid: ""failed""', 'code': '22P02', 'hint': None, 'details': None}",,,,failed,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+c975d376-c83a-4b41-bdd3-df9a6ac3235b,2026-02-17T00:31:22+00:00,SYSTEM_SYNC,"Full Chapter Sync (Prologue Final): 10 passed, 1 failed. Errors: audit_log: {'message': 'invalid input syntax for type uuid: ""failed""', 'code': '22P02', 'hint': None, 'details': None}",,,,partial_failure,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+92105c62-af0b-4578-8a9e-2788ce00e64c,2026-02-17T00:31:22+00:00,PROLOGUE_P3,Accuracy generated and Prologue sync completed.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+a3c88fdb-cec2-4c88-9133-82d8c830f7ea,2026-02-17T00:35:56+00:00,CH1_P1,Flashscore extraction and analysis completed.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+c1e66e26-d359-45d3-8910-58460cdafb39,2026-02-17T00:37:32+00:00,CH1_P2,Odds harvesting and URL resolution completed.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+3737dc00-1d3d-4dac-aa5c-f4be5ff36982,2026-02-17T00:41:15+00:00,SYSTEM_SYNC,"Full Chapter Sync (Chapter 1 Final): 10 passed, 1 failed. Errors: audit_log: {'message': 'invalid input syntax for type uuid: ""failed""', 'code': '22P02', 'hint': None, 'details': None}",,,,partial_failure,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+845f4a71-c005-4fc1-9039-77ef80dcc941,2026-02-17T00:41:15+00:00,CH1_P3_SYNC,Sync parity issues detected.,,,,partial_failure,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+50c5bbd7-e7dd-4475-83cc-da508ac3901b,2026-02-17T00:41:20+00:00,CH1_P3,Final sync and recommendations completed.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+e0fab3ae-9791-4b99-b22d-46a0c48f4ce5,2026-02-17T00:41:20+00:00,CH2_P1,Automated booking phase completed.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+6f393611-8518-4eb2-9ae9-608000fb8701,2026-02-17T00:41:43+00:00,CH2_P2,Withdrawal check completed. Balance: 0.0,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+befe5df3-1281-471b-9171-8f708889c481,2026-02-17T00:41:44+00:00,OVERSIGHT_REPORT,"═══ Chief Engineer Oversight Report ═══
 Cycle Count: #1
 Uptime: 0:22:55.829833
 Current Balance: ₦0.00
@@ -23,7 +23,214 @@ Failed: 0
 
 Health Check:
 ⚠️ Account balance is zero or unknown.
-⚠️ Low prediction volume today: 0 (expected ≥5).",,,,success
-1344e6d4-702b-44eb-93b9-e18f027ed9f1,2026-02-17 00:41:44,CH3,Chief Engineer oversight completed.,,,,success
-b0c24aef-e1d7-4823-99df-d836838665e0,2026-02-17 00:41:44,CYCLE_COMPLETE,Cycle #1 finished.,,,,success
-54898b3b-f3b4-4383-9bac-68d69e5e2dc8,2026-02-17 03:48:09,CYCLE_START,Cycle #1 initiated.,,,,success
+⚠️ Low prediction volume today: 0 (expected ≥5).",,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+1344e6d4-702b-44eb-93b9-e18f027ed9f1,2026-02-17T00:41:44+00:00,CH3,Chief Engineer oversight completed.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+b0c24aef-e1d7-4823-99df-d836838665e0,2026-02-17T00:41:44+00:00,CYCLE_COMPLETE,Cycle #1 finished.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+54898b3b-f3b4-4383-9bac-68d69e5e2dc8,2026-02-17T03:48:09+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T02:52:54.74047+00:00,1970-01-01T00:00:00+00:00
+a9901405-06de-496f-811d-86db5a6e6641,2026-02-17T03:02:10+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T03:03:37.793657+00:00,1970-01-01T00:00:00+00:00
+60031fe0-841c-4b8c-9264-2bc0812afe5b,2026-02-17T03:24:41+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T03:26:07.249479+00:00,1970-01-01T00:00:00+00:00
+ef060e9b-9700-47e1-9ebf-cf4ba04fdb6c,2026-02-17T03:35:24+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T03:36:48.085006+00:00,1970-01-01T00:00:00+00:00
+f8ae8143-52bf-486d-88e5-fd68ae95448d,2026-02-17T16:48:04+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T16:49:39.725776+00:00,1970-01-01T00:00:00+00:00
+82755d4f-876b-463f-b6a1-2ca503da95f9,2026-02-17T17:24:58+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-17T17:26:30.283076+00:00,1970-01-01T00:00:00+00:00
+7a61a763-2e5a-47fc-94f1-bda26691469a,2026-02-17T19:30:46+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 11 passed, 0 failed.",,,,success,2026-02-17T19:34:57.799352+00:00,1970-01-01T00:00:00+00:00
+4c82b5af-6c5e-4db1-b533-120bc19e9c77,2026-02-17T19:33:27+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T19:34:57.799352+00:00,1970-01-01T00:00:00+00:00
+783d6bc3-9b8b-47d5-a345-48cb7238e84f,2026-02-17T19:41:55+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-17T19:43:25.77277+00:00,1970-01-01T00:00:00+00:00
+d6271431-abeb-4ec8-bff7-48024cfeb347,2026-02-17T19:49:06+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-17T19:50:38.21065+00:00,1970-01-01T00:00:00+00:00
+91aa4ae1-bfd1-481a-aaf1-0fdbcfa4c5f9,2026-02-17T19:58:47+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-17T20:02:39.431968+00:00,1970-01-01T00:00:00+00:00
+c8c92029-66a4-4f2f-aa27-637bd57d5ce6,2026-02-17T19:58:47+00:00,PROLOGUE_P2,Metadata enrichment completed.,,,,success,2026-02-17T20:02:39.431968+00:00,1970-01-01T00:00:00+00:00
+4fdc7b0a-04c4-4bc4-b8f2-7bd53c45ab8b,2026-02-17T19:58:52+00:00,PROLOGUE_P3,Accuracy generated and Prologue sync completed.,,,,success,2026-02-17T20:02:39.431968+00:00,1970-01-01T00:00:00+00:00
+ecf73629-4175-4edc-9697-387c187458b8,2026-02-17T19:59:48+00:00,CH1_P1,Flashscore extraction and analysis completed.,,,,success,2026-02-17T20:02:39.431968+00:00,1970-01-01T00:00:00+00:00
+90689637-45f3-4354-9f8f-9b1e26c5c8c5,2026-02-17T20:01:07+00:00,CH1_P2,Odds harvesting and URL resolution completed.,,,,success,2026-02-17T20:02:39.431968+00:00,1970-01-01T00:00:00+00:00
+1fe5f624-368c-48f7-912f-512857a3fcb1,2026-02-17T20:02:39+00:00,SYSTEM_SYNC,"Full Chapter Sync (Chapter 1 Final): 11 passed, 0 failed.",,,,success,2026-02-18T04:39:53.458559+00:00,1970-01-01T00:00:00+00:00
+ce71f7a1-ae90-4e78-a10e-b7e9f29ed0db,2026-02-17T20:02:40+00:00,CH1_P3,Final sync and recommendations completed.,,,,success,2026-02-18T04:39:53.458559+00:00,1970-01-01T00:00:00+00:00
+3c673fc1-0f07-4fc2-9c0d-b65559fb246c,2026-02-17T20:02:40+00:00,CH2_P1,Automated booking phase completed.,,,,success,2026-02-18T04:39:53.458559+00:00,1970-01-01T00:00:00+00:00
+4e448331-c513-43db-b060-c156378a385e,2026-02-17T20:02:58+00:00,CH2_P2,Withdrawal check completed. Balance: 0.0,,,,success,2026-02-18T04:39:53.458559+00:00,1970-01-01T00:00:00+00:00
+59806b0d-8f69-47bf-830d-99df0dd786a6,2026-02-17T20:02:58+00:00,OVERSIGHT_REPORT,"═══ Chief Engineer Oversight Report ═══
+Cycle Count: #1
+Uptime: 0:13:51.901660
+Current Balance: ₦0.00
+Booked: 0
+Failed: 0
+
+Health Check:
+⚠️ Account balance is zero or unknown.
+⚠️ Low prediction volume today: 0 (expected ≥5).",,,,success,2026-02-18T04:39:53.458559+00:00,1970-01-01T00:00:00+00:00
+36e485db-9d01-43c7-8df9-da8cd7754f24,2026-02-17T20:02:58+00:00,CH3,Chief Engineer oversight completed.,,,,success,2026-02-18T04:39:53.458559+00:00,1970-01-01T00:00:00+00:00
+fb551134-3199-433d-89d3-785cec345a4d,2026-02-17T20:02:58+00:00,CYCLE_COMPLETE,Cycle #1 finished.,,,,success,2026-02-18T04:39:53.458559+00:00,1970-01-01T00:00:00+00:00
+862fd140-84a2-4679-9fd6-75808b4039dc,2026-02-18T04:38:23+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T04:39:53.458559+00:00,1970-01-01T00:00:00+00:00
+8d28fcec-3502-43cd-92f7-d5f8bb2c98b9,2026-02-18T04:47:37+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T04:51:54.919082+00:00,1970-01-01T00:00:00+00:00
+1a519bf7-6c6f-4334-b83e-e721d335895a,2026-02-18T04:47:37+00:00,PROLOGUE_P2,Metadata enrichment completed.,,,,success,2026-02-18T04:51:54.919082+00:00,1970-01-01T00:00:00+00:00
+c385460f-7196-44dc-ae04-f54b867fd6b8,2026-02-18T04:47:42+00:00,PROLOGUE_P3,Accuracy generated and Prologue sync completed.,,,,success,2026-02-18T04:51:54.919082+00:00,1970-01-01T00:00:00+00:00
+3ac7a5fc-9e7f-40ba-a224-9e1758d98c87,2026-02-18T04:49:09+00:00,CH1_P1,Flashscore extraction and analysis completed.,,,,success,2026-02-18T04:51:54.919082+00:00,1970-01-01T00:00:00+00:00
+bfb9a31f-a657-45c3-b214-73181b46a6ff,2026-02-18T04:50:27+00:00,CH1_P2,Odds harvesting and URL resolution completed.,,,,success,2026-02-18T04:51:54.919082+00:00,1970-01-01T00:00:00+00:00
+b9f49ae3-b137-4f7d-b08e-1e6e8d1c6a87,2026-02-18T04:51:54+00:00,SYSTEM_SYNC,"Full Chapter Sync (Chapter 1 Final): 11 passed, 0 failed.",,,,success,2026-02-18T05:07:23.35608+00:00,1970-01-01T00:00:00+00:00
+7fe876a5-fcef-47d1-b9f2-d66efc240291,2026-02-18T04:51:55+00:00,CH1_P3,Final sync and recommendations completed.,,,,success,2026-02-18T05:07:23.35608+00:00,1970-01-01T00:00:00+00:00
+5a9e8fd4-40e4-4274-bffb-bf291c57ff08,2026-02-18T04:51:55+00:00,CH2_P1,Automated booking phase completed.,,,,success,2026-02-18T05:07:23.35608+00:00,1970-01-01T00:00:00+00:00
+4574f8ed-697b-4078-b540-12becc3d7499,2026-02-18T04:52:13+00:00,CH2_P2,Withdrawal check completed. Balance: 0.0,,,,success,2026-02-18T05:07:23.35608+00:00,1970-01-01T00:00:00+00:00
+1272f875-060d-4bde-b531-a1756b2212cd,2026-02-18T04:52:13+00:00,OVERSIGHT_REPORT,"═══ Chief Engineer Oversight Report ═══
+Cycle Count: #1
+Uptime: 0:13:50.017516
+Current Balance: ₦0.00
+Booked: 0
+Failed: 0
+
+Health Check:
+⚠️ Account balance is zero or unknown.
+⚠️ Low prediction volume today: 0 (expected ≥5).",,,,success,2026-02-18T05:07:23.35608+00:00,1970-01-01T00:00:00+00:00
+4e41da24-78ac-4de3-a9d1-18da3278dd35,2026-02-18T04:52:13+00:00,CH3,Chief Engineer oversight completed.,,,,success,2026-02-18T05:07:23.35608+00:00,1970-01-01T00:00:00+00:00
+6a0cff99-bfb0-470d-b377-d60147f78eee,2026-02-18T04:52:13+00:00,CYCLE_COMPLETE,Cycle #1 finished.,,,,success,2026-02-18T05:07:23.35608+00:00,1970-01-01T00:00:00+00:00
+f7a51463-34d0-490c-b3eb-3e5a6bf072ed,2026-02-18T05:05:56+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T05:07:23.35608+00:00,1970-01-01T00:00:00+00:00
+864aa5f8-167d-4925-8f7d-44589a6e4e4e,2026-02-18T05:12:30+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T05:13:55.260681+00:00,1970-01-01T00:00:00+00:00
+39888c75-b66d-4e05-9278-e84044a87c80,2026-02-18T06:12:27+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 11 passed, 0 failed.",,,,success,2026-02-18T06:25:58.886657+00:00,1970-01-01T00:00:00+00:00
+7f90d412-3025-429a-935a-8e261f572a32,2026-02-18T06:24:32+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T06:25:58.886657+00:00,1970-01-01T00:00:00+00:00
+71a2cba7-ed8a-4a26-9fbb-af8945ef26bf,2026-02-18T06:31:08+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T06:32:34.576118+00:00,1970-01-01T00:00:00+00:00
+2b6bbf81-ac58-448e-a3de-3fe614420e43,2026-02-18T07:57:30+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 11 passed, 0 failed.",,,,success,2026-02-18T07:59:59.342314+00:00,1970-01-01T00:00:00+00:00
+b151ab61-1aad-4bc6-8e8c-8ec95c3c3c42,2026-02-18T07:58:35+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T07:59:59.342314+00:00,1970-01-01T00:00:00+00:00
+649685c4-06d9-4691-b386-1c3eaea6f4a2,2026-02-18T08:05:07+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T08:06:34.272058+00:00,1970-01-01T00:00:00+00:00
+a4f11dad-4611-4ae4-a5f3-caf5146cbd54,2026-02-18T08:10:29+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 11 passed, 0 failed.",,,,success,2026-02-18T08:12:26.781444+00:00,1970-01-01T00:00:00+00:00
+4a806500-ee16-4efc-970d-ace3c19092dd,2026-02-18T08:10:57+00:00,PROLOGUE_P2,Failed: Browser.close: Connection closed while reading from the driver,,,,failed,2026-02-18T08:12:26.781444+00:00,1970-01-01T00:00:00+00:00
+6052fef6-8a77-4681-9654-48d9e59367d1,2026-02-18T08:12:26+00:00,SYSTEM_SYNC,"Full Chapter Sync (Prologue Final): 11 passed, 0 failed.",,,,success,2026-02-18T08:16:36.983565+00:00,1970-01-01T00:00:00+00:00
+b4e58d15-229b-4f6a-b837-109ffbda2de8,2026-02-18T08:12:26+00:00,PROLOGUE_P3,Accuracy generated and Prologue sync completed.,,,,success,2026-02-18T08:16:36.983565+00:00,1970-01-01T00:00:00+00:00
+f302c60a-d793-482c-9941-efeb9d93b086,2026-02-18T08:13:54+00:00,CH1_P1,Flashscore extraction and analysis completed.,,,,success,2026-02-18T08:16:36.983565+00:00,1970-01-01T00:00:00+00:00
+f0fa8b4a-fcc0-4294-9e7c-43b8bbfa9861,2026-02-18T08:15:12+00:00,CH1_P2,Odds harvesting and URL resolution completed.,,,,success,2026-02-18T08:16:36.983565+00:00,1970-01-01T00:00:00+00:00
+2d85b007-0112-48f2-bdab-d4afad287a1d,2026-02-18T08:16:36+00:00,SYSTEM_SYNC,"Full Chapter Sync (Chapter 1 Final): 11 passed, 0 failed.",,,,success,2026-02-18T08:29:23.284291+00:00,1970-01-01T00:00:00+00:00
+2b35447a-466e-47ac-a514-950774e6ae31,2026-02-18T08:16:37+00:00,CH1_P3,Final sync and recommendations completed.,,,,success,2026-02-18T08:29:23.284291+00:00,1970-01-01T00:00:00+00:00
+8316d22b-19f5-4eed-bb01-4d97b226549c,2026-02-18T08:16:37+00:00,CH2_P1,Automated booking phase completed.,,,,success,2026-02-18T08:29:23.284291+00:00,1970-01-01T00:00:00+00:00
+713278e7-5fd0-4c8b-82a4-a6828cf1f4a7,2026-02-18T08:16:55+00:00,CH2_P2,Withdrawal check completed. Balance: 0.0,,,,success,2026-02-18T08:29:23.284291+00:00,1970-01-01T00:00:00+00:00
+2a84ea33-fd4f-4772-a112-821089748c05,2026-02-18T08:16:55+00:00,OVERSIGHT_REPORT,"═══ Chief Engineer Oversight Report ═══
+Cycle Count: #1
+Uptime: 0:18:19.873261
+Current Balance: ₦0.00
+Booked: 0
+Failed: 0
+
+Health Check:
+⚠️ Account balance is zero or unknown.
+⚠️ Low prediction volume today: 0 (expected ≥5).",,,,success,2026-02-18T08:29:23.284291+00:00,1970-01-01T00:00:00+00:00
+0d3fac77-af13-4a62-b68c-2440c676ceb7,2026-02-18T08:16:55+00:00,CH3,Chief Engineer oversight completed.,,,,success,2026-02-18T08:29:23.284291+00:00,1970-01-01T00:00:00+00:00
+169a06a5-db1f-4f2c-be3e-f4a7a09fbad4,2026-02-18T08:16:55+00:00,CYCLE_COMPLETE,Cycle #1 finished.,,,,success,2026-02-18T08:29:23.284291+00:00,1970-01-01T00:00:00+00:00
+93befd04-bf73-4c67-b68c-4882f372bccb,2026-02-18T08:27:56+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T08:29:23.284291+00:00,1970-01-01T00:00:00+00:00
+c22e3605-91ed-4d6f-93c1-6a378dff2bf8,2026-02-18T08:34:34+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T08:36:00.730303+00:00,1970-01-01T00:00:00+00:00
+9b4d0bf2-d721-4c9f-b63b-5a4fc6c40672,2026-02-18T09:46:42+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T09:48:13.260788+00:00,1970-01-01T00:00:00+00:00
+f1613885-6625-45c9-9231-b12d0b3dc880,2026-02-18T09:53:31+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T09:54:59.551221+00:00,1970-01-01T00:00:00+00:00
+6e35bc45-13ac-4174-b423-3d0ad3c53e71,2026-02-18T10:09:03+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T10:10:44.252165+00:00,1970-01-01T00:00:00+00:00
+bd236cbc-ee6f-4dbb-b9ff-8b2498dc2518,2026-02-18T10:16:13+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T10:17:42.515416+00:00,1970-01-01T00:00:00+00:00
+cf6793fb-f6e0-4d70-96ea-b9a8794225f2,2026-02-18T10:19:22+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 11 passed, 0 failed.",,,,success,2026-02-18T10:48:33.234302+00:00,1970-01-01T00:00:00+00:00
+073963c0-ecfc-4a39-aef8-281e4b485968,2026-02-18T10:46:59+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T10:48:33.234302+00:00,1970-01-01T00:00:00+00:00
+b3c9a69d-0722-4497-ab64-9d979781cbc7,2026-02-18T10:53:59+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T10:55:32.862144+00:00,1970-01-01T00:00:00+00:00
+c42268cc-ee8f-4a2e-9503-592c4de91443,2026-02-18T10:57:20+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 11 passed, 0 failed.",,,,success,2026-02-18T10:59:26.436247+00:00,1970-01-01T00:00:00+00:00
+b9ab1ae4-e4b3-4c4f-8cbd-bbc91e6b9a57,2026-02-18T10:57:51+00:00,PROLOGUE_P2,Metadata enrichment completed.,,,,success,2026-02-18T10:59:26.436247+00:00,1970-01-01T00:00:00+00:00
+80217713-7782-4bc5-8117-00066e6d8092,2026-02-18T11:02:14+00:00,CH1_P2,Odds harvesting and URL resolution completed.,,,,success,2026-02-18T11:04:00.691523+00:00,1970-01-01T00:00:00+00:00
+fb3d7f2b-9509-47e9-a53e-9f13142127c8,2026-02-18T11:04:00+00:00,SYSTEM_SYNC,"Full Chapter Sync (Chapter 1 Final): 11 passed, 0 failed.",,,,success,2026-02-18T11:13:29.961437+00:00,1970-01-01T00:00:00+00:00
+34c3edc3-1e45-4079-aa10-ea5b56a43604,2026-02-18T11:04:01+00:00,CH1_P3,Final sync and recommendations completed.,,,,success,2026-02-18T11:13:29.961437+00:00,1970-01-01T00:00:00+00:00
+a57700f9-d086-4bd0-b93a-4efa3a81969c,2026-02-18T11:04:01+00:00,CH2_P1,Automated booking phase completed.,,,,success,2026-02-18T11:13:29.961437+00:00,1970-01-01T00:00:00+00:00
+1145cf30-2462-4dff-bb85-f55101d56eba,2026-02-18T11:04:19+00:00,CH2_P2,Withdrawal check completed. Balance: 0.0,,,,success,2026-02-18T11:13:29.961437+00:00,1970-01-01T00:00:00+00:00
+72289862-6ffe-471e-9c12-c5da9f75fb51,2026-02-18T11:04:19+00:00,OVERSIGHT_REPORT,"═══ Chief Engineer Oversight Report ═══
+Cycle Count: #1
+Uptime: 0:17:20.091988
+Current Balance: ₦0.00
+Booked: 0
+Failed: 0
+
+Health Check:
+⚠️ Account balance is zero or unknown.
+⚠️ Low prediction volume today: 0 (expected ≥5).",,,,success,2026-02-18T11:13:29.961437+00:00,1970-01-01T00:00:00+00:00
+f5724c29-80da-4bf2-9574-164c11aa4ce0,2026-02-18T11:04:19+00:00,CH3,Chief Engineer oversight completed.,,,,success,2026-02-18T11:13:29.961437+00:00,1970-01-01T00:00:00+00:00
+c6544c14-e8f5-442a-9800-c9f415b28a75,2026-02-18T11:04:19+00:00,CYCLE_COMPLETE,Cycle #1 finished.,,,,success,2026-02-18T11:13:29.961437+00:00,1970-01-01T00:00:00+00:00
+7c6f1b99-275d-41e1-8ff1-222afe3ca8f1,2026-02-18T11:16:39+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 11 passed, 0 failed.",,,,success,2026-02-18T11:35:42.224157+00:00,1970-01-01T00:00:00+00:00
+81160c2e-272b-4b07-a47b-47d7f52abfba,2026-02-18T11:47:57+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T11:49:26.146386+00:00,1970-01-01T00:00:00+00:00
+ea550622-bbc2-43e4-b525-028718dd0de0,2026-02-18T11:53:02+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T11:54:32.407757+00:00,1970-01-01T00:00:00+00:00
+02d81c75-4d70-4e9a-b815-0a0d49d3edfd,2026-02-18T12:01:03+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T12:03:32.018789+00:00,1970-01-01T00:00:00+00:00
+94c92f2a-207e-4ede-81c0-04075c167d13,2026-02-18T12:01:53+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T12:03:32.018789+00:00,1970-01-01T00:00:00+00:00
+fc519522-86c7-4a26-99db-eec24b7e1e58,2026-02-18T12:41:29+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T12:42:58.841539+00:00,1970-01-01T00:00:00+00:00
+dc5bbd73-2885-4131-8a01-ea5a775ecb4d,2026-02-18T13:35:39+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T13:37:23.214785+00:00,1970-01-01T00:00:00+00:00
+6a6788e0-afe2-4903-af81-31b32ea08401,2026-02-18T14:07:32+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T14:09:56.26401+00:00,1970-01-01T00:00:00+00:00
+eca0f340-5d62-4b1d-9304-b4a960df7777,2026-02-18T14:20:32+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-18T14:53:21.755874+00:00,1970-01-01T00:00:00+00:00
+8ed55fdb-82f2-41cd-8182-b617ca879407,2026-02-18T14:51:18+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T14:53:21.755874+00:00,1970-01-01T00:00:00+00:00
+ea63e78a-8e76-4d40-a53a-cdc8fa66edb3,2026-02-18T14:54:26+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-18T15:36:10.50151+00:00,1970-01-01T00:00:00+00:00
+fd7279da-bdbe-442d-b737-c58737d8645b,2026-02-18T15:34:34+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T15:36:10.50151+00:00,1970-01-01T00:00:00+00:00
+47188ba3-cece-4dbc-9aa0-b384575013de,2026-02-18T15:36:49+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-18T19:15:35.72445+00:00,1970-01-01T00:00:00+00:00
+c9f2000a-b960-405c-9a28-8ba598cdf1d6,2026-02-18T15:59:31+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T19:15:35.72445+00:00,1970-01-01T00:00:00+00:00
+a9ba462c-735e-4ad0-b711-9e157e250b8a,2026-02-18T16:19:04+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T19:15:35.72445+00:00,1970-01-01T00:00:00+00:00
+93fe68ac-2af2-4628-a09a-3814fc8e1c00,2026-02-18T16:19:55+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-18T19:15:35.72445+00:00,1970-01-01T00:00:00+00:00
+5577d7af-910e-4963-87bd-77beef1f29bf,2026-02-18T16:47:55+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T19:15:35.72445+00:00,1970-01-01T00:00:00+00:00
+8d2966ec-58bc-425a-87ae-acf3d14d0ba9,2026-02-18T16:48:47+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-18T19:15:35.72445+00:00,1970-01-01T00:00:00+00:00
+90b8f9ea-b64a-4f13-a3d0-ca8862fda991,2026-02-18T19:03:18+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T19:15:35.72445+00:00,1970-01-01T00:00:00+00:00
+9202b0ee-bc12-42c6-8868-b2e50491d9ca,2026-02-18T19:04:10+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-18T19:15:35.72445+00:00,1970-01-01T00:00:00+00:00
+003b613f-14d5-4850-8655-801c714ad4db,2026-02-18T19:14:04+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T19:15:35.72445+00:00,1970-01-01T00:00:00+00:00
+025d0129-5164-481e-b968-e3f1c36118a6,2026-02-18T19:16:00+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-18T19:35:58.323931+00:00,1970-01-01T00:00:00+00:00
+03ab45f6-cf6a-4bfd-9e03-b0773540e7c3,2026-02-18T19:34:23+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T19:35:58.323931+00:00,1970-01-01T00:00:00+00:00
+3972dd56-7d3e-4559-918d-8d688579e315,2026-02-18T19:39:43+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T19:41:18.172432+00:00,1970-01-01T00:00:00+00:00
+69dccfaf-7403-44f6-add1-a9c00dc66e97,2026-02-18T19:41:41+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-18T20:00:25.696967+00:00,1970-01-01T00:00:00+00:00
+fdec5e75-1cdd-4d02-bd2e-c56ced84087a,2026-02-18T19:58:52+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T20:00:25.696967+00:00,1970-01-01T00:00:00+00:00
+d082db0f-de64-4cb7-9b62-942bee39506d,2026-02-18T20:26:21+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-18T20:27:55.436482+00:00,1970-01-01T00:00:00+00:00
+c9918c6b-7c7e-4d24-8588-ec18bda67ff6,2026-02-18T20:28:18+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-18T20:47:08.778539+00:00,1970-01-01T00:00:00+00:00
+bec4e7e7-dc01-4d36-b565-c2e868e83e64,2026-02-18T20:45:33+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-18T20:47:08.778539+00:00,1970-01-01T00:00:00+00:00
+22586405-f4a2-4b76-a95f-cb5c2fd4816c,2026-02-19T00:18:20+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T00:20:00.493406+00:00,1970-01-01T00:00:00+00:00
+fc82239f-37f8-41ff-87e5-10aafcb5a747,2026-02-19T00:19:14+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-19T00:20:00.493406+00:00,1970-01-01T00:00:00+00:00
+e106a5b8-7dcb-4bf8-a14d-8850dd03e077,2026-02-19T00:38:15+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-19T00:39:53.755887+00:00,1970-01-01T00:00:00+00:00
+6e67fd9c-7282-4b11-8a95-63b561d09ebf,2026-02-19T00:51:10+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T00:55:20.162362+00:00,1970-01-01T00:00:00+00:00
+1106c123-59f7-46ce-ac27-d5d6a82849a1,2026-02-19T00:52:00+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-19T00:55:20.162362+00:00,1970-01-01T00:00:00+00:00
+c9c7453a-a74e-475a-955a-3e35b3a5a0d9,2026-02-19T00:53:38+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T00:55:20.162362+00:00,1970-01-01T00:00:00+00:00
+e17dcd03-b0a2-4b87-b824-837a02745696,2026-02-19T00:55:43+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-19T01:12:32.547949+00:00,1970-01-01T00:00:00+00:00
+cbdd273d-3422-461d-a240-77181e6c4406,2026-02-19T01:10:57+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-19T01:12:32.547949+00:00,1970-01-01T00:00:00+00:00
+564fe3b3-1aab-495d-aa0b-df48e869c9eb,2026-02-19T02:15:54+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T02:17:31.653124+00:00,1970-01-01T00:00:00+00:00
+f2697042-a919-4545-8a3b-c68721fd99ca,2026-02-19T02:19:06+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T02:20:09.925022+00:00,1970-01-01T00:00:00+00:00
+ef999d69-6d01-4b73-b57c-df6868740f05,2026-02-19T02:20:46+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-19T02:28:34.838218+00:00,1970-01-01T00:00:00+00:00
+6ee577e1-cd8d-4438-b4ea-5f85d80eca88,2026-02-19T02:27:28+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T02:28:34.838218+00:00,1970-01-01T00:00:00+00:00
+1e5043ee-4556-49d2-80ca-802f1841ebc6,2026-02-19T02:29:07+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-19T02:56:20.671872+00:00,1970-01-01T00:00:00+00:00
+77a7b3af-bebb-4590-8ab7-ddb0ec8cd39a,2026-02-19T02:54:44+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-19T02:56:20.671872+00:00,1970-01-01T00:00:00+00:00
+bed8764b-c575-4ccb-a148-12384275a6d4,2026-02-19T07:07:26+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T07:08:53.004536+00:00,1970-01-01T00:00:00+00:00
+e14a8e67-1411-4ca7-9724-e823853b71c6,2026-02-19T07:08:13+00:00,STREAMER_START,Live score streamer initialized.,,,,success,2026-02-19T07:08:53.004536+00:00,1970-01-01T00:00:00+00:00
+8f30fa5c-56b9-4fb5-b04a-e6c1e30e0412,2026-02-19T07:22:48+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-19T07:24:17.607038+00:00,1970-01-01T00:00:00+00:00
+55d3806b-b0c1-4e23-896a-c47da03579f4,2026-02-19T07:22:48+00:00,PROLOGUE_P2,Metadata enrichment completed.,,,,success,2026-02-19T07:24:17.607038+00:00,1970-01-01T00:00:00+00:00
+6d6c7a1d-ae5c-4b4d-b6a9-f3a5649ad5c8,2026-02-19T08:10:08+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T08:11:27.691967+00:00,1970-01-01T00:00:00+00:00
+983833de-1492-4ce1-a91e-ba3994c2d3ce,2026-02-19T12:59:29+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T13:00:52.68559+00:00,1970-01-01T00:00:00+00:00
+6752d449-3a42-4179-932c-8b8381bb38ab,2026-02-19T13:02:39+00:00,STREAMER_START,Live score streamer initialized (v2: LIVE+FINISHED).,,,,success,2026-02-19T13:28:56.613064+00:00,1970-01-01T00:00:00+00:00
+fff38ea8-4756-4d1d-a4da-1d75a90e6dba,2026-02-19T13:27:38+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T13:28:56.613064+00:00,1970-01-01T00:00:00+00:00
+5623f065-189e-4efc-96b4-b780a678f116,2026-02-19T13:30:13+00:00,STREAMER_START,Live score streamer initialized (v2: LIVE+FINISHED).,,,,success,2026-02-19T13:58:36.956022+00:00,1970-01-01T00:00:00+00:00
+117278ad-ebec-4cbe-846b-694839ef2691,2026-02-19T13:57:10+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-19T13:58:36.956022+00:00,1970-01-01T00:00:00+00:00
+530ef045-fc68-4042-abe8-a41d1be903df,2026-02-19T14:02:06+00:00,CH1_P1,Flashscore extraction and analysis completed.,,,,success,2026-02-19T14:05:11.032201+00:00,1970-01-01T00:00:00+00:00
+5916c8a9-b478-4786-9ff1-f783817ae77b,2026-02-19T14:03:30+00:00,CH1_P2,Odds harvesting and URL resolution completed.,,,,success,2026-02-19T14:05:11.032201+00:00,1970-01-01T00:00:00+00:00
+d9491501-4ceb-47cd-ab16-d6e5c64f0e60,2026-02-19T14:20:32+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T14:21:48.108219+00:00,1970-01-01T00:00:00+00:00
+6052aa0a-6e9b-44e1-bb2a-c8ee9ca858c5,2026-02-19T14:22:20+00:00,STREAMER_START,Live score streamer initialized (v2: LIVE+FINISHED).,,,,success,2026-02-19T14:39:52.900267+00:00,1970-01-01T00:00:00+00:00
+0da92efd-1a0b-4d8b-b0b6-328651cc2677,2026-02-19T14:38:27+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-19T14:39:52.900267+00:00,1970-01-01T00:00:00+00:00
+86242e0d-432e-4e49-b417-5e5fad96bbfa,2026-02-19T14:44:16+00:00,CH1_P1,Flashscore extraction and analysis completed.,,,,success,2026-02-19T14:47:09.949609+00:00,1970-01-01T00:00:00+00:00
+64dce2db-90f9-4cd9-866d-55eb3f1aa567,2026-02-19T14:45:40+00:00,CH1_P2,Odds harvesting and URL resolution completed.,,,,success,2026-02-19T14:47:09.949609+00:00,1970-01-01T00:00:00+00:00
+e1f01390-5e85-4043-ab85-60fd65d8d9f1,2026-02-19T14:47:10+00:00,SYSTEM_SYNC,"Full Chapter Sync (Chapter 1 Final): 12 passed, 0 failed.",,,,success,2026-02-19T15:03:03.299369+00:00,1970-01-01T00:00:00+00:00
+104bf056-c845-429d-9a10-dbf3ec3e7beb,2026-02-19T14:47:10+00:00,CH1_P3,Final sync and recommendations completed.,,,,success,2026-02-19T15:03:03.299369+00:00,1970-01-01T00:00:00+00:00
+ac313290-a107-417e-b531-1f0e91ba1c4f,2026-02-19T14:47:10+00:00,CH2_P1,Automated booking phase completed.,,,,success,2026-02-19T15:03:03.299369+00:00,1970-01-01T00:00:00+00:00
+22ec9ce6-7082-48a9-8807-033e052af0ce,2026-02-19T14:47:29+00:00,CH2_P2,Withdrawal check completed. Balance: 0.0,,,,success,2026-02-19T15:03:03.299369+00:00,1970-01-01T00:00:00+00:00
+bfc03a9f-741a-4606-8f36-5e8e9873a288,2026-02-19T15:01:05+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T15:03:03.299369+00:00,1970-01-01T00:00:00+00:00
+1cc934aa-6974-4538-ae5a-3c9865258b2c,2026-02-19T15:02:01+00:00,STREAMER_START,Live score streamer initialized (v2: LIVE+FINISHED).,,,,success,2026-02-19T15:03:03.299369+00:00,1970-01-01T00:00:00+00:00
+f2f0bc7c-0eb7-4ac3-a56f-374bb1801206,2026-02-19T23:28:22+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-19T23:29:48.527119+00:00,1970-01-01T00:00:00+00:00
+f73bd414-a097-4ad9-83cc-219d3704e15d,2026-02-19T23:29:09+00:00,STREAMER_START,Live score streamer initialized (v2: LIVE+FINISHED).,,,,success,2026-02-19T23:29:48.527119+00:00,1970-01-01T00:00:00+00:00
+d082e070-2b91-42d7-9399-55157385189d,2026-02-19T23:46:53+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-19T23:48:31.191959+00:00,1970-01-01T00:00:00+00:00
+887b3829-6e91-488a-a677-33f0555b8f98,2026-02-19T23:53:53+00:00,CH1_P1,Flashscore extraction and analysis completed.,,,,success,2026-02-19T23:57:12.852463+00:00,1970-01-01T00:00:00+00:00
+9b336bc3-42c2-45c7-9878-6fe7ba913fa6,2026-02-19T23:55:18+00:00,CH1_P2,Odds harvesting and URL resolution completed.,,,,success,2026-02-19T23:57:12.852463+00:00,1970-01-01T00:00:00+00:00
+8fab1bad-f227-43a4-866a-6722752754a7,2026-02-19T23:57:12+00:00,SYSTEM_SYNC,"Full Chapter Sync (Chapter 1 Final): 12 passed, 0 failed.",,,,success,2026-02-20T00:33:35.363732+00:00,1970-01-01T00:00:00+00:00
+efbf53e0-c890-4c83-9716-6ad998ad7592,2026-02-19T23:57:13+00:00,CH1_P3,Final sync and recommendations completed.,,,,success,2026-02-20T00:33:35.363732+00:00,1970-01-01T00:00:00+00:00
+fc16e59f-63ff-4ab6-9e8e-4bdad53d0026,2026-02-19T23:57:13+00:00,CH2_P1,Automated booking phase completed.,,,,success,2026-02-20T00:33:35.363732+00:00,1970-01-01T00:00:00+00:00
+74cc7114-b883-4cb3-adcb-4edaf114168b,2026-02-19T23:57:32+00:00,CH2_P2,Withdrawal check completed. Balance: 0.0,,,,success,2026-02-20T00:33:35.363732+00:00,1970-01-01T00:00:00+00:00
+220e540e-a66a-41d0-8bab-c2afd8ebbdb2,2026-02-20T00:32:10+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-20T00:33:35.363732+00:00,1970-01-01T00:00:00+00:00
+e0b28cde-8e1a-46b6-9111-4d93714c6540,2026-02-20T00:32:53+00:00,STREAMER_START,Live score streamer initialized (v2: LIVE+FINISHED).,,,,success,2026-02-20T00:33:35.363732+00:00,1970-01-01T00:00:00+00:00
+0f7b71fc-d7d8-497a-b8c0-2c26394e20cc,2026-02-20T00:39:39+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-20T00:41:04.266505+00:00,1970-01-01T00:00:00+00:00
+1f42bd9a-80ca-4786-bb8c-12e67c12d80b,2026-02-20T00:40:21+00:00,STREAMER_START,"Live score streamer v3 initialized (ALL tab, 15s).",,,,success,2026-02-20T00:41:04.266505+00:00,1970-01-01T00:00:00+00:00
+591a8528-ae35-4ae0-ab06-52036488dbf6,2026-02-20T00:42:51+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-20T00:44:10.866366+00:00,1970-01-01T00:00:00+00:00
+2247d359-265b-451b-bfcb-4bee4dcd43bc,2026-02-20T00:46:06+00:00,STREAMER_START,"Live score streamer v3 initialized (ALL tab, 15s).",,,,success,2026-02-20T01:05:15.314178+00:00,1970-01-01T00:00:00+00:00
+75311d56-0ca9-42ff-9fbd-7d02c2ce586e,2026-02-20T01:03:58+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-20T01:05:15.314178+00:00,1970-01-01T00:00:00+00:00
+5e194a69-faea-4032-a9da-d2e26021b1c9,2026-02-20T01:06:38+00:00,STREAMER_START,"Live score streamer v3 initialized (ALL tab, 15s).",,,,success,2026-02-20T01:40:36.328298+00:00,1970-01-01T00:00:00+00:00
+5c0a8590-4708-48bd-835a-d30b7e6ce0d2,2026-02-20T01:39:07+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-20T01:40:36.328298+00:00,1970-01-01T00:00:00+00:00
+3c4d3d4d-c523-4381-81d0-740374938244,2026-02-20T01:56:09+00:00,CH1_P1,Failed: BrowserContext.close: Connection closed while reading from the driver,,,,failed,2026-02-20T01:58:37.818512+00:00,1970-01-01T00:00:00+00:00
+9b8230e3-e97c-4fd6-aeb6-ed0090f14a46,2026-02-20T01:56:13+00:00,CH1_P2,Odds harvesting and URL resolution completed.,,,,success,2026-02-20T01:58:37.818512+00:00,1970-01-01T00:00:00+00:00
+6b824858-8c43-4462-9dda-95e19664b6f1,2026-02-20T01:57:12+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,2026-02-20T01:58:37.818512+00:00,1970-01-01T00:00:00+00:00
+677e6695-2e0b-4866-9d26-573a15faa806,2026-02-20T01:57:54+00:00,STREAMER_START,"Live score streamer v3 initialized (ALL tab, 15s).",,,,success,2026-02-20T01:58:37.818512+00:00,1970-01-01T00:00:00+00:00
+3cb3cfce-52e2-474d-aafd-ffdee312af56,2026-02-20T02:04:45+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,2026-02-20T02:06:28.034993+00:00,1970-01-01T00:00:00+00:00
+0aa56d16-68fb-4964-8c65-84e61ca0e169,2026-02-20T04:55:16+00:00,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",,,,success,2026-02-20T04:57:14.270221+00:00,1970-01-01T00:00:00+00:00
+8e64e689-9eed-4295-ab0e-bcaa580248bf,2026-02-20T04:57:14+00:00,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",,,,success,2026-02-20T04:58:44.134866+00:00,1970-01-01T00:00:00+00:00
+a0b6dd9a-68c4-4042-869b-dcc1fd31f22d,2026-02-20T06:01:26+00:00,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",None,None,None,success,2026-02-20T05:13:08.478936+00:00,1970-01-01T00:00:00+00:00
+bb118d3b-1425-44c8-9f40-4785ba163aeb,2026-02-20T05:05:41+00:00,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",,,,success,2026-02-20T05:07:43.80215+00:00,1970-01-01T00:00:00+00:00
+5c3292e6-ce2c-4985-9b25-295f0ee923be,2026-02-20T05:07:43+00:00,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",,,,success,2026-02-20T05:12:05.131838+00:00,1970-01-01T00:00:00+00:00
+17c3f757-24c0-4f3d-a8c1-05f5d0437d61,2026-02-20 06:12:34,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",,,,success,,
+0d6ab8b2-4ac7-43ce-add0-861ef8044ef9,2026-02-20T05:12:05+00:00,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",None,None,None,success,2026-02-20T05:24:11.037061+00:00,1970-01-01T00:00:00+00:00
+9475d7d6-bce4-41b6-a515-a9f0aa7368bb,2026-02-20 07:02:25,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",,,,success

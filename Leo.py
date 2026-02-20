@@ -260,7 +260,7 @@ async def run_utility(args):
             await run_review_process(p)
             print_accuracy_report()
 
-    elif args.backtest:
+    elif args.backtest and not args.rule_engine:
         print("\n  --- LEO: Single-Pass Backtest ---")
         from Scripts.backtest_monitor import TRIGGER_FILE, CONFIG_FILE
         from Core.Intelligence.rule_config import RuleConfig
@@ -274,6 +274,47 @@ async def run_utility(args):
             await run_flashscore_offline_repredict(playwright=None, custom_config=config)
         else:
             print(f"  [ERROR] Config file not found: {CONFIG_FILE}")
+
+    elif args.streamer:
+        print("\n  --- LEO: Live Score Streamer ---")
+        async with async_playwright() as p:
+            await live_score_streamer(p)
+
+    elif args.rule_engine:
+        from Core.Intelligence.rule_engine_manager import RuleEngineManager
+
+        if args.list:
+            print("\n  --- LEO: Rule Engine Registry ---")
+            RuleEngineManager.print_engine_list()
+
+        elif args.set_default:
+            target = args.set_default
+            # Try by name first, then by ID
+            engines = RuleEngineManager.list_engines()
+            engine_id = None
+            for e in engines:
+                if e["name"].lower() == target.lower() or e["id"] == target:
+                    engine_id = e["id"]
+                    break
+            if engine_id and RuleEngineManager.set_default(engine_id):
+                engine = RuleEngineManager.get_engine(engine_id)
+                print(f"\n  ✅ Default engine set to: {engine['name']}")
+                RuleEngineManager.print_engine(engine)
+            else:
+                print(f"\n  ❌ Engine '{target}' not found.")
+                RuleEngineManager.print_engine_list()
+
+        elif args.backtest:
+            from Core.Intelligence.progressive_backtester import run_progressive_backtest
+            engine_id = args.id or RuleEngineManager.get_default()["id"]
+            start_date = args.from_date or "2025-08-01"
+            await run_progressive_backtest(engine_id, start_date)
+
+        else:
+            # Default: show current default engine
+            print("\n  --- LEO: Default Rule Engine ---")
+            engine = RuleEngineManager.get_default()
+            RuleEngineManager.print_engine(engine)
 
 
 # ============================================================
@@ -438,7 +479,8 @@ if __name__ == "__main__":
 
     # Determine which mode to run
     is_utility = any([args.sync, args.recommend, args.accuracy,
-                      args.search_dict, args.review, args.backtest])
+                      args.search_dict, args.review, args.backtest,
+                      args.rule_engine, args.streamer])
     is_granular = args.prologue or args.chapter is not None
 
     try:

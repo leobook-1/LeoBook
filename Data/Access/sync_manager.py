@@ -295,6 +295,9 @@ class SyncManager:
                             if match_short:
                                 d, m, y_short = match_short.groups()
                                 val = f"20{y_short}-{m}-{d}"
+                            elif not re.match(r'^\d{4}-\d{2}-\d{2}', val):
+                                # Not a valid date format (e.g. "Pending", "TBD") — null it
+                                val = None
                     
                     if k == 'over_2.5':
                         clean['over_2_5'] = val
