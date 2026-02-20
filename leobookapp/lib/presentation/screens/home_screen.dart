@@ -65,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen>
             if (isDesktop) {
               return DesktopHomeContent(
                 state: state,
+                onViewAllPredictions: widget.onViewAllPredictions,
               );
             }
 

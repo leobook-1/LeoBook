@@ -396,50 +396,55 @@ def main():
                     else:
                         fully_enriched_team_ids.add(tid)
 
-    fully_enriched_league_keys = set()
-    incomplete_league_keys = set()
+    fully_enriched_league_keys = set()  # rl_ids with search_terms AND all critical fields
+    incomplete_league_keys = set()      # rl_ids with search_terms but missing critical fields
     LEAGUE_CRITICAL_FIELDS = ['country', 'logo_url']
+
+    # Load existing region_league data FIRST (needed for ID matching)
+    existing_leagues = {}
     if os.path.exists(REGION_LEAGUE_CSV):
         with open(REGION_LEAGUE_CSV, mode='r', encoding='utf-8') as f:
             for row in csv.DictReader(f):
-                st = row.get('search_terms', '').strip()
-                lkey = row.get('league', '').strip()
-                if not lkey:
+                rl_id = row.get("rl_id", "").strip()
+                if not rl_id:
                     continue
+                existing_leagues[rl_id] = row
+                st = row.get('search_terms', '').strip()
                 if st and st != '[]':
                     missing = [fld for fld in LEAGUE_CRITICAL_FIELDS
                                if not row.get(fld, '').strip()]
                     if missing:
-                        incomplete_league_keys.add(lkey)
+                        incomplete_league_keys.add(rl_id)
                     else:
-                        fully_enriched_league_keys.add(lkey)
+                        fully_enriched_league_keys.add(rl_id)
+
+    # Map raw league names → rl_ids so we can correctly compare
+    raw_to_rlid = {}
+    for raw_name in leagues_raw:
+        rl_id, _ = find_best_match_league(raw_name, None, existing_leagues)
+        raw_to_rlid[raw_name] = rl_id
+
+    # Count using rl_ids
+    empty_leagues = [l for l in leagues_raw if raw_to_rlid[l] not in fully_enriched_league_keys and raw_to_rlid[l] not in incomplete_league_keys]
+    incomplete_leagues_list = [l for l in leagues_raw if raw_to_rlid[l] in incomplete_league_keys]
 
     print(f"\n[PASS 1] Teams:   {len(teams_raw) - len(fully_enriched_team_ids) - len(incomplete_team_ids)} empty → enrich")
     print(f"[PASS 2] Teams:   {len(incomplete_team_ids)} incomplete → re-enrich")
     print(f"[SKIP]   Teams:   {len(fully_enriched_team_ids)} fully enriched")
-    print(f"[PASS 1] Leagues: {len(leagues_raw) - len(fully_enriched_league_keys) - len(incomplete_league_keys)} empty → enrich")
-    print(f"[PASS 2] Leagues: {len(incomplete_league_keys)} incomplete → re-enrich")
+    print(f"[PASS 1] Leagues: {len(empty_leagues)} empty → enrich")
+    print(f"[PASS 2] Leagues: {len(incomplete_leagues_list)} incomplete → re-enrich")
     print(f"[SKIP]   Leagues: {len(fully_enriched_league_keys)} fully enriched")
 
     # Prepared Update Maps for CSVs
     league_updates = {}
     team_updates = {}
 
-    # Load existing region_league data for matching
-    existing_leagues = {}
-    if os.path.exists(REGION_LEAGUE_CSV):
-        with open(REGION_LEAGUE_CSV, mode='r', encoding='utf-8') as f:
-            r = csv.DictReader(f)
-            for row in r:
-                if row.get("rl_id"):
-                    existing_leagues[row["rl_id"]] = row
-
     # ───────────────────────────────────────────────
-    # PASS 1: Enrich leagues with NO search_terms
+    # PASS 1: Enrich leagues with NO search_terms (empty first!)
+    # PASS 2: Re-enrich leagues with search_terms but missing fields
     # ───────────────────────────────────────────────
-    league_list_all = list(leagues_raw)
-    league_list_pass1 = [l for l in league_list_all if l not in fully_enriched_league_keys and l not in incomplete_league_keys]
-    league_list_pass2 = [l for l in league_list_all if l in incomplete_league_keys]
+    league_list_pass1 = empty_leagues
+    league_list_pass2 = incomplete_leagues_list
     print(f"\n── PASS 1: Enriching {len(league_list_pass1)} empty leagues ──")
     for league_list, pass_name in [(league_list_pass1, "PASS 1"), (league_list_pass2, "PASS 2")]:
       if not league_list:

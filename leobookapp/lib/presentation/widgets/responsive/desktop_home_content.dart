@@ -14,10 +14,12 @@ import '../footnote_section.dart';
 
 class DesktopHomeContent extends StatefulWidget {
   final HomeLoaded state;
+  final VoidCallback? onViewAllPredictions;
 
   const DesktopHomeContent({
     super.key,
     required this.state,
+    this.onViewAllPredictions,
   });
 
   @override
@@ -118,6 +120,7 @@ class _DesktopHomeContentState extends State<DesktopHomeContent>
                     matches: widget.state.featuredMatches,
                     recommendations: widget.state.filteredRecommendations,
                     allMatches: widget.state.allMatches,
+                    onViewAll: widget.onViewAllPredictions,
                   ),
                   SizedBox(height: Responsive.dp(context, 24)),
                   const AccuracyReportCard(),

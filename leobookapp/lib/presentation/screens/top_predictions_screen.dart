@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:leobookapp/core/constants/app_colors.dart';
+import 'package:leobookapp/core/constants/responsive_constants.dart';
 import 'package:leobookapp/data/models/recommendation_model.dart';
 import 'package:leobookapp/data/models/match_model.dart';
 import 'package:leobookapp/logic/cubit/home_cubit.dart';
 import '../widgets/recommendation_card.dart';
 import '../screens/match_details_screen.dart';
-// We'll reuse the DateItem logic if possible, or just re-implement cleanly
 
+/// Unified Top Predictions screen — lives inside MainScreen's IndexedStack.
+/// No own Scaffold/AppBar. Shows recommendations for SCHEDULED matches,
+/// sorted by time (latest first).
 class TopPredictionsScreen extends StatelessWidget {
-  final bool isSidebarExpanded;
-  const TopPredictionsScreen({super.key, this.isSidebarExpanded = true});
+  const TopPredictionsScreen({super.key});
 
   void _navigateToMatch(
     BuildContext context,
@@ -46,260 +48,150 @@ class TopPredictionsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width > 1024;
+    return BlocBuilder<HomeCubit, HomeState>(
+      builder: (context, state) {
+        if (state is! HomeLoaded) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
-      appBar: isDesktop
-          ? null
-          : AppBar(
-              backgroundColor: AppColors.backgroundDark.withValues(alpha: 0.8),
-              elevation: 0,
-              title: const Text(
-                "Top Predictions",
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  fontSize: 18,
-                ),
-              ),
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(80),
-                child: _buildDateSelector(
-                  context,
-                  BlocProvider.of<HomeCubit>(context).state,
-                ),
-              ),
-            ),
-      body: BlocBuilder<HomeCubit, HomeState>(
-        builder: (context, state) {
-          if (state is! HomeLoaded) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        // Filter to all top recommendations (sorted by time)
+        // Usually these are scheduled/upcoming matches
+        final recs = List<RecommendationModel>.from(state.allRecommendations);
 
-          return CustomScrollView(
-            slivers: [
-              if (isDesktop)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.arrow_back,
-                                  color: Colors.white70),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
-                            const SizedBox(width: 16),
-                            const Text(
-                              "TOP PREDICTIONS",
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: -1,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          "Expert-curated match analyses with ultra-high accuracy targets.",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textGrey,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        _buildDateSelector(context, state),
-                      ],
+        // Optional: Filter for upcoming only if desirable,
+        // but often 'Top Predictions' includes the most relevant ones.
+        // We sort by time (latest first as requested before, but if they are predictions
+        // we might want earliest first? Actually the user previously said 'latest first').
+        recs.sort((a, b) => b.time.compareTo(a.time));
+
+        return Column(
+          children: [
+            // ── Header Row ──
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                Responsive.sp(context, 14),
+                Responsive.sp(context, 14),
+                Responsive.sp(context, 14),
+                Responsive.sp(context, 8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.auto_awesome,
+                    color: AppColors.primary,
+                    size: Responsive.sp(context, 16),
+                  ),
+                  SizedBox(width: Responsive.sp(context, 6)),
+                  Expanded(
+                    child: Text(
+                      "TOP PREDICTIONS",
+                      style: TextStyle(
+                        fontSize: Responsive.sp(context, 13),
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-                ),
-              // Recommendations List/Grid
-              state.filteredRecommendations.isEmpty
-                  ? const SliverFillRemaining(
-                      child: Center(
-                        child: Text(
-                          "No top predictions available.",
-                          style: TextStyle(color: Colors.white54),
-                        ),
+                  // Filter icon (placeholder)
+                  Container(
+                    padding: EdgeInsets.all(Responsive.sp(context, 6)),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius:
+                          BorderRadius.circular(Responsive.sp(context, 8)),
+                    ),
+                    child: Icon(
+                      Icons.filter_list_rounded,
+                      color: Colors.white54,
+                      size: Responsive.sp(context, 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Count ──
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: Responsive.sp(context, 14),
+                vertical: Responsive.sp(context, 6),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    "${recs.length} PREDICTION${recs.length == 1 ? '' : 'S'}",
+                    style: TextStyle(
+                      fontSize: Responsive.sp(context, 8),
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textGrey,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    "LATEST FIRST",
+                    style: TextStyle(
+                      fontSize: Responsive.sp(context, 7),
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary.withValues(alpha: 0.7),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Recommendations List ──
+            Expanded(
+              child: recs.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.emoji_events_outlined,
+                            size: Responsive.sp(context, 36),
+                            color: Colors.white12,
+                          ),
+                          SizedBox(height: Responsive.sp(context, 10)),
+                          Text(
+                            "No predictions available",
+                            style: TextStyle(
+                              fontSize: Responsive.sp(context, 11),
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white24,
+                            ),
+                          ),
+                          SizedBox(height: Responsive.sp(context, 4)),
+                          Text(
+                            "Check back later for new picks",
+                            style: TextStyle(
+                              fontSize: Responsive.sp(context, 8),
+                              color: Colors.white12,
+                            ),
+                          ),
+                        ],
                       ),
                     )
-                  : SliverPadding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: isDesktop ? 32 : 0,
+                  : ListView.builder(
+                      padding: EdgeInsets.only(
+                        bottom: Responsive.sp(context, 80),
                       ),
-                      sliver: isDesktop
-                          ? SliverGrid(
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: isSidebarExpanded ? 2 : 3,
-                                crossAxisSpacing: 24,
-                                mainAxisSpacing: 24,
-                                childAspectRatio: 1.4,
-                              ),
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                                  final rec =
-                                      state.filteredRecommendations[index];
-                                  return GestureDetector(
-                                    onTap: () => _navigateToMatch(
-                                      context,
-                                      rec,
-                                      state.allMatches,
-                                    ),
-                                    child: RecommendationCard(
-                                      recommendation: rec,
-                                    ),
-                                  );
-                                },
-                                childCount:
-                                    state.filteredRecommendations.length,
-                              ),
-                            )
-                          : SliverList(
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                                  final rec =
-                                      state.filteredRecommendations[index];
-                                  return GestureDetector(
-                                    onTap: () => _navigateToMatch(
-                                      context,
-                                      rec,
-                                      state.allMatches,
-                                    ),
-                                    child: RecommendationCard(
-                                      recommendation: rec,
-                                    ),
-                                  );
-                                },
-                                childCount:
-                                    state.filteredRecommendations.length,
-                              ),
-                            ),
+                      itemCount: recs.length,
+                      itemBuilder: (context, index) {
+                        final rec = recs[index];
+                        return GestureDetector(
+                          onTap: () =>
+                              _navigateToMatch(context, rec, state.allMatches),
+                          child: RecommendationCard(recommendation: rec),
+                        );
+                      },
                     ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildDateSelector(BuildContext context, HomeState state) {
-    if (state is! HomeLoaded) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
-        ),
-      ),
-      child: SizedBox(
-        height: 70,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: 7,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          itemBuilder: (context, index) {
-            final now = DateTime.now();
-            final dayOffset = index - 3;
-            final date = DateTime(
-              now.year,
-              now.month,
-              now.day,
-            ).add(Duration(days: dayOffset));
-
-            final isSelected = date.year == state.selectedDate.year &&
-                date.month == state.selectedDate.month &&
-                date.day == state.selectedDate.day;
-
-            return _buildDateItem(context, date, isSelected);
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDateItem(BuildContext context, DateTime date, bool isSelected) {
-    final now = DateTime.now();
-    final isToday =
-        date.year == now.year && date.month == now.month && date.day == now.day;
-    final dayName =
-        isToday ? "TODAY" : javaDateFormat('EEE', date).toUpperCase();
-    final dayNum = javaDateFormat('d MMM', date).toUpperCase();
-
-    return GestureDetector(
-      onTap: () => context.read<HomeCubit>().updateDate(date),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        width: 75,
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary.withValues(alpha: 0.12)
-              : Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.primary.withValues(alpha: 0.25)
-                : Colors.white.withValues(alpha: 0.06),
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              dayName,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                color: isSelected ? AppColors.primary : Colors.white38,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              dayNum,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? AppColors.primary : Colors.white70,
-              ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
-  }
-
-  // Simple date formatter helper since intl's DateFormat might need initialization or be verbose here
-  String javaDateFormat(String pattern, DateTime date) {
-    final months = [
-      "JAN",
-      "FEB",
-      "MAR",
-      "APR",
-      "MAY",
-      "JUN",
-      "JUL",
-      "AUG",
-      "SEP",
-      "OCT",
-      "NOV",
-      "DEC",
-    ];
-    final days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
-
-    if (pattern == 'EEE') return days[date.weekday - 1];
-    if (pattern == 'd MMM') return "${date.day} ${months[date.month - 1]}";
-    return "";
   }
 }

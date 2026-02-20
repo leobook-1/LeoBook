@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:leobookapp/core/constants/app_colors.dart';
+import 'package:leobookapp/core/constants/responsive_constants.dart';
 import 'package:leobookapp/data/models/recommendation_model.dart';
 import 'package:leobookapp/data/repositories/data_repository.dart';
 import '../screens/team_screen.dart';
 import '../screens/league_screen.dart';
-
 import 'package:leobookapp/core/widgets/glass_container.dart';
 
 class RecommendationCard extends StatefulWidget {
@@ -20,13 +20,13 @@ class RecommendationCard extends StatefulWidget {
 class _RecommendationCardState extends State<RecommendationCard> {
   bool _isHovered = false;
 
-  RecommendationModel get recommendation => widget.recommendation;
+  RecommendationModel get rec => widget.recommendation;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isLive = recommendation.confidence.toLowerCase().contains('live') ||
-        recommendation.league.toLowerCase().contains('live');
+    final isLive = rec.confidence.toLowerCase().contains('live') ||
+        rec.league.toLowerCase().contains('live');
     final accentColor = isLive ? AppColors.liveRed : AppColors.primary;
 
     return MouseRegion(
@@ -37,362 +37,266 @@ class _RecommendationCardState extends State<RecommendationCard> {
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
         child: GlassContainer(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          borderRadius: 20,
+          margin: EdgeInsets.symmetric(
+            horizontal: Responsive.sp(context, 4),
+            vertical: Responsive.sp(context, 4),
+          ),
+          padding: EdgeInsets.all(Responsive.sp(context, 10)),
+          borderRadius: Responsive.sp(context, 10),
           borderColor: _isHovered
               ? accentColor.withValues(alpha: 0.5)
-              : Colors.transparent,
-          onTap: () {
-            // We could link to match details if we had the ID here,
-            // for now just hover/click effect.
-          },
-          child: Stack(
+              : (isLive
+                  ? AppColors.liveRed.withValues(alpha: 0.3)
+                  : AppColors.primary.withValues(alpha: 0.2)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Vertical Accent Line
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: 3,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.6),
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(2),
-                      bottomRight: Radius.circular(2),
+              // ── League + Time Row ──
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => LeagueScreen(
+                              leagueId: rec.league,
+                              leagueName: rec.league,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        rec.league.toUpperCase(),
+                        style: TextStyle(
+                          color: AppColors.textGrey.withValues(alpha: 0.8),
+                          fontSize: Responsive.sp(context, 7),
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.0,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
-                ),
+                  SizedBox(width: Responsive.sp(context, 6)),
+                  if (isLive)
+                    _LivePulseTag()
+                  else
+                    Text(
+                      "${rec.date} • ${rec.time}".toUpperCase(),
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: Responsive.sp(context, 7),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                ],
               ),
 
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Top Row: League & Stars
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => LeagueScreen(
-                                      leagueId: recommendation.league,
-                                      leagueName: recommendation.league,
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: Text(
-                                recommendation.league.toUpperCase(),
-                                style: TextStyle(
-                                  color:
-                                      AppColors.textGrey.withValues(alpha: 0.6),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                            ),
-                            if (isLive)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: _LivePulseTag(),
-                              )
-                            else
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  "${recommendation.date}, ${recommendation.time}"
-                                      .toUpperCase(),
-                                  style: const TextStyle(
-                                    color: AppColors.primary,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        Icon(
-                          Icons.stars_rounded,
-                          size: 20,
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Colors.grey[200],
-                        ),
-                      ],
+              SizedBox(height: Responsive.sp(context, 8)),
+
+              // ── Teams Row ──
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Home Team
+                  Expanded(
+                      child: _buildTeamCol(
+                          context, rec.homeTeam, rec.homeShort, isDark)),
+                  // VS
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: Responsive.sp(context, 6)),
+                    child: Text(
+                      "VS",
+                      style: TextStyle(
+                        fontSize: Responsive.sp(context, 9),
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.textGrey,
+                      ),
                     ),
+                  ),
+                  // Away Team
+                  Expanded(
+                      child: _buildTeamCol(
+                          context, rec.awayTeam, rec.awayShort, isDark)),
+                ],
+              ),
 
-                    const SizedBox(height: 24),
+              SizedBox(height: Responsive.sp(context, 8)),
 
-                    // Team Layout (3 Columns)
-                    Row(
-                      children: [
-                        // Home Team
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => TeamScreen(
-                                    teamName: recommendation.homeTeam,
-                                    repository: context.read<DataRepository>(),
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 52,
-                                  height: 52,
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.05)
-                                        : Colors.black.withValues(alpha: 0.04),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.08)
-                                          : Colors.black
-                                              .withValues(alpha: 0.06),
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      recommendation.homeShort,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  recommendation.homeTeam,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                    color: isDark
-                                        ? Colors.white
-                                        : AppColors.textDark,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        // VS or Score
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            "VS",
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              fontStyle: FontStyle.italic,
-                              color: isDark ? Colors.white24 : Colors.grey[300],
-                            ),
-                          ),
-                        ),
-
-                        // Away Team
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => TeamScreen(
-                                    teamName: recommendation.awayTeam,
-                                    repository: context.read<DataRepository>(),
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 52,
-                                  height: 52,
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.05)
-                                        : Colors.black.withValues(alpha: 0.04),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.08)
-                                          : Colors.black
-                                              .withValues(alpha: 0.06),
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      recommendation.awayShort,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  recommendation.awayTeam,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                    color: isDark
-                                        ? Colors.white
-                                        : AppColors.textDark,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-                    Divider(
-                      color: isDark
+              // ── Prediction Section (glass inner) ──
+              Container(
+                padding: EdgeInsets.all(Responsive.sp(context, 7)),
+                decoration: BoxDecoration(
+                  color: isLive
+                      ? AppColors.liveRed.withValues(alpha: 0.08)
+                      : (isDark
                           ? Colors.white.withValues(alpha: 0.05)
-                          : Colors.black.withValues(alpha: 0.05),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Footer Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          : Colors.black.withValues(alpha: 0.03)),
+                  borderRadius:
+                      BorderRadius.circular(Responsive.sp(context, 8)),
+                  border: Border.all(
+                    color: isLive
+                        ? AppColors.liveRed.withValues(alpha: 0.15)
+                        : (isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.04)),
+                    width: 0.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Left: Prediction + Reliability
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isLive ? "IN-PLAY PREDICTION" : "LEO PREDICTION",
+                            style: TextStyle(
+                              fontSize: Responsive.sp(context, 6),
+                              fontWeight: FontWeight.w900,
+                              color: isLive
+                                  ? AppColors.liveRed
+                                  : AppColors.textGrey,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          SizedBox(height: Responsive.sp(context, 1)),
+                          Text(
+                            rec.prediction,
+                            style: TextStyle(
+                              fontSize: Responsive.sp(context, 9),
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.primary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          SizedBox(height: Responsive.sp(context, 2)),
+                          Row(
                             children: [
                               Text(
-                                "RELIABILITY",
+                                "RELIABILITY: ${(rec.reliabilityScore * 10).toStringAsFixed(0)}%",
                                 style: TextStyle(
+                                  fontSize: Responsive.sp(context, 6),
+                                  fontWeight: FontWeight.bold,
+                                  color:
+                                      AppColors.success.withValues(alpha: 0.7),
+                                ),
+                              ),
+                              SizedBox(width: Responsive.sp(context, 6)),
+                              Text(
+                                "ACC: ${rec.overallAcc}",
+                                style: TextStyle(
+                                  fontSize: Responsive.sp(context, 6),
+                                  fontWeight: FontWeight.bold,
                                   color:
                                       AppColors.textGrey.withValues(alpha: 0.6),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "${(recommendation.reliabilityScore * 10).toStringAsFixed(0)}%",
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white
-                                      : AppColors.textDark,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 14,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white10 : Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isDark ? Colors.white10 : Colors.black12,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text(
-                                "ACCURACY",
-                                style: TextStyle(
-                                  color: AppColors.textGrey,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              Text(
-                                recommendation.overallAcc,
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white
-                                      : AppColors.textDark,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                "ODDS",
-                                style: TextStyle(
-                                  color:
-                                      AppColors.primary.withValues(alpha: 0.7),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                recommendation.marketOdds.toStringAsFixed(2),
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    SizedBox(width: Responsive.sp(context, 4)),
+                    // Right: Odds pill
+                    if (rec.marketOdds > 0)
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: Responsive.sp(context, 8),
+                          vertical: Responsive.sp(context, 3),
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          borderRadius:
+                              BorderRadius.circular(Responsive.sp(context, 6)),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.25),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Text(
+                          rec.marketOdds.toStringAsFixed(2),
+                          style: TextStyle(
+                            fontSize: Responsive.sp(context, 10),
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTeamCol(
+      BuildContext context, String teamName, String shortName, bool isDark) {
+    final logoSize = Responsive.sp(context, 28);
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TeamScreen(
+              teamName: teamName,
+              repository: context.read<DataRepository>(),
+            ),
+          ),
+        );
+      },
+      child: Column(
+        children: [
+          Container(
+            width: logoSize,
+            height: logoSize,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.black.withValues(alpha: 0.03),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.black.withValues(alpha: 0.04),
+                width: 0.5,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                shortName,
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: Responsive.sp(context, 10),
+                  color: AppColors.textGrey.withValues(alpha: 0.5),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: Responsive.sp(context, 4)),
+          Text(
+            teamName,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: Responsive.sp(context, 8),
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : AppColors.textDark,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -432,19 +336,19 @@ class _LivePulseTagState extends State<_LivePulseTag>
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6,
-            height: 6,
+            width: Responsive.sp(context, 4),
+            height: Responsive.sp(context, 4),
             decoration: const BoxDecoration(
               color: AppColors.liveRed,
               shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(width: 6),
-          const Text(
+          SizedBox(width: Responsive.sp(context, 4)),
+          Text(
             "LIVE NOW",
             style: TextStyle(
               color: AppColors.liveRed,
-              fontSize: 9,
+              fontSize: Responsive.sp(context, 7),
               fontWeight: FontWeight.w900,
             ),
           ),
