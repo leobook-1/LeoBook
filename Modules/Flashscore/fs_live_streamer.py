@@ -28,9 +28,39 @@ from Core.Browser.site_helpers import fs_universal_popup_dismissal
 from Core.Utils.constants import NAVIGATION_TIMEOUT, WAIT_FOR_LOAD_STATE_TIMEOUT
 from Core.Intelligence.selector_manager import SelectorManager
 
-STREAM_INTERVAL = 15  # seconds (was 60 in v2)
+STREAM_INTERVAL = 60  # seconds
 FLASHSCORE_URL = "https://www.flashscore.com/football/"
 _STREAMER_HEARTBEAT_FILE = os.path.join(os.path.dirname(LIVE_SCORES_CSV), '.streamer_heartbeat')
+
+# JS to expand the "Show More" dropdown found in mobile/collapsed views
+EXPAND_DROPDOWN_JS = """
+() => {
+    // Selector from knowledge.json: expand_show_more_button
+    const btn = document.querySelector('.wclIcon__leagueShowMoreCont .wcl-trigger_CGiIV[data-state="delayed-open"] button.wcl-accordion_7Fi80') 
+             || document.querySelector('.wcl-accordion_7Fi80');
+    if (btn) {
+        btn.click();
+        return true;
+    }
+    return false;
+}
+"""
+
+# JS to expand all collapsed league headers
+EXPAND_LEAGUES_JS = """
+() => {
+    let clicked = 0;
+    const items = document.querySelectorAll('.event__header--collapsed');
+    items.forEach(el => {
+        const arrow = el.querySelector('.event__arrow');
+        if (arrow) {
+            arrow.click();
+            clicked++;
+        }
+    });
+    return clicked;
+}
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -296,14 +326,6 @@ async def _extract_all_matches(page) -> list:
       - 'fro': frozen/suspended
       - 'scheduled': upcoming (has time, no score)
     """
-    # Expand collapsed headers
-    try:
-        expanded = await page.evaluate(EXPAND_COLLAPSED_JS)
-        if expanded:
-            print(f"   [Streamer] Expanded {expanded} collapsed league headers (ALL)")
-            await asyncio.sleep(1)
-    except Exception:
-        pass
 
     matches = await page.evaluate(r"""() => {
         const matches = [];
@@ -416,20 +438,37 @@ async def _click_all_tab(page) -> bool:
             tab = page.locator(tab_sel)
             if await tab.count() > 0:
                 await tab.first.click()
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(2)
                 return True
     except Exception:
         pass
+    return False
+
+
+async def ensure_content_expanded(page):
+    """Robustly expand dropdowns and leagues to ensure all matches are visible."""
+    # 1. Expand the "Show More" dropdown if present (Mobile/Collapsed view)
     try:
-        # Fallback: click the first tab (ALL is always first)
-        fallback_sel = SelectorManager.get_selector("fs_home_page", "all_tab_fallback") or ".filters__tab"
-        tab = page.locator(fallback_sel).first
-        if await tab.count() > 0:
-            await tab.click()
-            await asyncio.sleep(1.5)
-            return True
+        if await page.evaluate(EXPAND_DROPDOWN_JS):
+            print("   [Streamer] Expanded 'Show More' dropdown")
+            await asyncio.sleep(2)
     except Exception:
-        return False
+        pass
+
+    # 2. Expand league headers
+    for attempt in range(1, 4):
+        expanded = await page.evaluate(EXPAND_LEAGUES_JS)
+        if expanded > 0:
+            print(f"   [Streamer] Expanded {expanded} league headers (attempt {attempt})")
+            await asyncio.sleep(2)
+        
+        # Verify if matches are visible
+        matches = await _extract_all_matches(page)
+        if matches:
+            return True
+        print(f"   [Streamer] Content expansion check failed (no matches found), retrying {attempt}/3...")
+        await asyncio.sleep(3)
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -437,35 +476,51 @@ async def _click_all_tab(page) -> bool:
 # ---------------------------------------------------------------------------
 async def live_score_streamer(playwright: Playwright):
     """
-    Main streaming loop v3. Runs independently in its own browser context.
-    Scrapes the ALL tab every 15 seconds as single source of truth.
-    Separates live, finished, cancelled, postponed, FRO matches.
-    Never crashes — errors are logged and retried.
+    Main streaming loop v3.2 (Mobile Optimized).
+    - Headless browser session with iPhone 12 emulation.
+    - 60s extraction interval.
+    - Robust dropdown + league expansion.
+    - Immediate DB + CSV upserts.
     """
-    print("\n   [Streamer] 🔴 Live Score Streamer v3 starting (ALL tab, 15s)...")
-    log_audit_event("STREAMER_START", "Live score streamer v3 initialized (ALL tab, 15s).")
+    print("\n   [Streamer] 🔴 Mobile Live Score Streamer v3.2 starting (Headless, 60s)...")
+    log_audit_event("STREAMER_START", "Mobile live score streamer v3.2 initialized (Headless, 60s).")
 
     browser = None
     try:
+        # Launch headless Chromium
         browser = await playwright.chromium.launch(
             headless=True,
-            args=["--disable-dev-shm-usage", "--no-sandbox", "--disable-gpu"]
+            args=["--disable-dev-shm-usage", "--no-sandbox"]
         )
 
+        # Emulate iPhone 12
+        iphone_12 = playwright.devices['iPhone 12']
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            **iphone_12,
             timezone_id="Africa/Lagos"
         )
         page = await context.new_page()
 
-        # Initial navigation
-        print("   [Streamer] Navigating to Flashscore...")
+        # Initial navigation (wait up to 3 mins)
+        print("   [Streamer] Navigating to Flashscore (Mobile view, up to 3 mins)...")
         await page.goto(FLASHSCORE_URL, timeout=NAVIGATION_TIMEOUT, wait_until="domcontentloaded")
-        await asyncio.sleep(3)
+        
+        # Target a visible element to ensure page has actual content before proceeding
+        try:
+            await page.wait_for_selector(".sportName", timeout=60000)
+        except:
+            print("   [Streamer] Warning: sportName container not found, proceeding anyway...")
+        
+        await asyncio.sleep(5)
+        
+        # Handle cookies/popups
         await fs_universal_popup_dismissal(page, "fs_home_page")
-
-        # Ensure ALL tab is active (default, but be explicit)
+        
+        # Ensure ALL tab is active
         await _click_all_tab(page)
+        
+        # Initial expansion
+        await ensure_content_expanded(page)
 
         sync = SyncManager()
         cycle = 0
@@ -473,18 +528,15 @@ async def live_score_streamer(playwright: Playwright):
         while True:
             cycle += 1
             _touch_heartbeat()
+            now_ts = dt.now().strftime("%H:%M:%S")
+            
             try:
-                # Refresh the page periodically (every 40 cycles ≈ 10 min at 15s)
-                if cycle % 40 == 0:
-                    await page.reload(wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT)
-                    await asyncio.sleep(3)
-                    await fs_universal_popup_dismissal(page, "fs_home_page")
-                    await _click_all_tab(page)
+                # Periodic expansion check (every cycle to be safe)
+                await ensure_content_expanded(page)
 
-                # ── SINGLE PHASE: ALL TAB ──
+                # Extraction
                 all_matches = await _extract_all_matches(page)
-                now = dt.now().strftime("%H:%M:%S")
-
+                
                 # Separate by category
                 LIVE_STATUSES = {'live', 'halftime', 'break', 'penalties', 'extra_time'}
                 RESOLVED_STATUSES = {'finished', 'cancelled', 'postponed', 'fro', 'abandoned'}
@@ -493,85 +545,40 @@ async def live_score_streamer(playwright: Playwright):
                 resolved_matches = [m for m in all_matches if m.get('status') in RESOLVED_STATUSES]
                 current_live_ids = {m['fixture_id'] for m in live_matches}
 
-                # ── PURGE STALE LIVE SCORES ──
+                # Save & Sync
                 stale_ids = _purge_stale_live_scores(current_live_ids)
-                if stale_ids:
-                    print(f"   [Streamer] 🧹 Purged {len(stale_ids)} stale entries from live_scores")
-
-                # ── PROCESS & SYNC ──
+                
                 if live_matches or resolved_matches:
-                    parts = []
-                    if live_matches:
-                        parts.append(f"{len(live_matches)} live")
-                    if resolved_matches:
-                        fin_count = sum(1 for m in resolved_matches if m['status'] == 'finished')
-                        other_count = len(resolved_matches) - fin_count
-                        if fin_count:
-                            parts.append(f"{fin_count} finished")
-                        if other_count:
-                            parts.append(f"{other_count} cancelled/postp/fro")
-                    total = len(all_matches)
-                    parts.append(f"{total} total")
-                    print(f"   [Streamer] {now} — {', '.join(parts)} (cycle {cycle})")
-
-                    # Save live matches locally
+                    # Update local CSVs
                     for m in live_matches:
                         save_live_score_entry(m)
-
-                    # Propagate status to schedules + predictions
+                    
                     sched_upd, pred_upd = _propagate_status_updates(live_matches, resolved_matches)
 
-                    # Sync everything to Supabase
+                    # Immediate Supabase Sync
                     if sync.supabase:
-                        try:
-                            if live_matches:
-                                await sync.batch_upsert('live_scores', live_matches)
-                            if stale_ids:
-                                try:
-                                    sync.supabase.table('live_scores').delete().in_(
-                                        'fixture_id', list(stale_ids)
-                                    ).execute()
-                                except Exception as e:
-                                    print(f"   [Streamer] Stale purge sync error: {e}")
-                            if pred_upd:
-                                await sync.batch_upsert('predictions', pred_upd)
-                            if sched_upd:
-                                await sync.batch_upsert('schedules', sched_upd)
-                        except Exception as e:
-                            print(f"   [Streamer] Cloud sync error: {e}")
+                        if live_matches: await sync.batch_upsert('live_scores', live_matches)
+                        if pred_upd: await sync.batch_upsert('predictions', pred_upd)
+                        if sched_upd: await sync.batch_upsert('schedules', sched_upd)
+                        if stale_ids:
+                            try:
+                                sync.supabase.table('live_scores').delete().in_('fixture_id', list(stale_ids)).execute()
+                            except: pass
+
+                    print(f"   [Streamer] {now_ts} — {len(live_matches)} live, {len(resolved_matches)} resolved, {len(all_matches)} total (cycle {cycle})")
                 else:
-                    # Even with no data, check last-resort transitions
-                    sched_upd, pred_upd = _propagate_status_updates([], [])
-
-                    if sync.supabase and (pred_upd or sched_upd):
-                        try:
-                            if pred_upd:
-                                await sync.batch_upsert('predictions', pred_upd)
-                            if sched_upd:
-                                await sync.batch_upsert('schedules', sched_upd)
-                        except Exception as e:
-                            print(f"   [Streamer] Cloud sync error (empty): {e}")
-
-                    if stale_ids and sync.supabase:
-                        try:
-                            sync.supabase.table('live_scores').delete().in_(
-                                'fixture_id', list(stale_ids)
-                            ).execute()
-                        except Exception:
-                            pass
-
-                    if cycle % 20 == 1:  # Less frequent logging at 15s intervals
-                        print(f"   [Streamer] {now} — No matches (cycle {cycle})")
+                    # Fallback check
+                    _propagate_status_updates([], [])
+                    print(f"   [Streamer] {now_ts} — No active/resolved matches found (cycle {cycle})")
 
             except Exception as e:
-                print(f"   [Streamer] ⚠ Extraction error (cycle {cycle}): {e}")
+                print(f"   [Streamer] ⚠ Extraction error: {e}")
+                # Try to recover session
                 try:
-                    await page.goto(FLASHSCORE_URL, timeout=NAVIGATION_TIMEOUT, wait_until="domcontentloaded")
-                    await asyncio.sleep(3)
+                    await page.reload(wait_until="networkidle")
                     await fs_universal_popup_dismissal(page, "fs_home_page")
                     await _click_all_tab(page)
-                except Exception:
-                    pass
+                except: pass
 
             await asyncio.sleep(STREAM_INTERVAL)
 
@@ -579,11 +586,9 @@ async def live_score_streamer(playwright: Playwright):
         print("   [Streamer] Streamer cancelled.")
     except Exception as e:
         print(f"   [Streamer] Fatal error: {e}")
-        log_audit_event("STREAMER_ERROR", f"Fatal: {e}", status="failed")
     finally:
         if browser:
             try:
                 await browser.close()
-            except Exception:
-                pass
+            except: pass
         print("   [Streamer] 🔴 Streamer stopped.")
