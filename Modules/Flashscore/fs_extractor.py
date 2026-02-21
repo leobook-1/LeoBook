@@ -40,6 +40,7 @@ async def extract_all_matches(page: Page, label: str = "Extractor") -> list:
     Returns list of match dicts.
     """
     selectors = SelectorManager.get_all_selectors_for_context("fs_home_page")
+    await asyncio.sleep(3)
 
     result = await page.evaluate(r"""(sel) => {
         const matches = [];
