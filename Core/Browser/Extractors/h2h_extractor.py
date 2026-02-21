@@ -20,7 +20,7 @@ import asyncio
 
 async def activate_h2h_tab(page: Page) -> bool:
     """
-    Activates the H2H tab on the match page.
+    Activates the H2H tab on the match page and expands all sections.
     """
     print("      [Extractor] Activiting H2H tab...")
     # Use the CORRECT key 'tab_h2h' from 'fs_match_page' as defined in knowledge.json
@@ -34,8 +34,11 @@ async def activate_h2h_tab(page: Page) -> bool:
         if await page.locator(tab_selector).is_visible(timeout=5000):
             await page.click(tab_selector)
             await page.wait_for_load_state("domcontentloaded")
-            await asyncio.sleep(5.0)
-            await fs_universal_popup_dismissal(page, "fs_h2h_tab") # Use specific context popup dismissal if needed, or generic
+            await asyncio.sleep(2.0)
+            await fs_universal_popup_dismissal(page, "fs_h2h_tab")
+            
+            # Exhaustive expansion before returning
+            await expand_h2h_sections(page)
             return True
         else:
              print(f"      [Extractor] H2H tab selector '{tab_selector}' not visible.")
@@ -43,6 +46,46 @@ async def activate_h2h_tab(page: Page) -> bool:
     except Exception as e:
         print(f"      [Extractor] Failed to activate H2H tab: {e}")
         return False
+
+
+async def expand_h2h_sections(page: Page):
+    """
+    Recursively clicks 'Show more' buttons in H2H sections until no more exist.
+    """
+    show_more_selector = get_selector("fs_h2h_tab", "h2h_show_more_button") or ".h2h__showMore"
+    print(f"      [Extractor] Expanding H2H sections (Exhaustive)...")
+    
+    max_clicks = 10 # Safety cap to prevent infinite loops if JS fails
+    clicks = 0
+    
+    while clicks < max_clicks:
+        try:
+            # Check for visibility of any 'Show more' button
+            buttons = page.locator(show_more_selector)
+            count = await buttons.count()
+            
+            if count == 0:
+                break
+                
+            visible_any = False
+            for i in range(count):
+                btn = buttons.nth(i)
+                if await btn.is_visible(timeout=2000):
+                    await btn.click()
+                    await asyncio.sleep(0.8)
+                    visible_any = True
+            
+            if not visible_any:
+                break
+                
+            clicks += 1
+        except Exception:
+            break
+            
+    if clicks > 0:
+        print(f"      [Extractor] H2H expanded (performed {clicks} bulk clicks).")
+    else:
+        print(f"      [Extractor] No expansion needed or buttons not found.")
 
 
 async def extract_h2h_data(page: Page, home_team_main: str, away_team_main: str, context: str = "fs_h2h_tab") -> Dict[str, Any]:
