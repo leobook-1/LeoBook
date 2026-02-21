@@ -31,22 +31,35 @@ async def activate_h2h_tab(page: Page) -> bool:
         return False
 
     try:
+        # 1. First, we MUST click the H2H Tab itself
         if await page.locator(tab_selector).is_visible(timeout=5000):
             await page.click(tab_selector)
             await page.wait_for_load_state("domcontentloaded")
             await asyncio.sleep(2.0)
             await fs_universal_popup_dismissal(page, "fs_h2h_tab")
+
+            # 2. Extract "Show more" buttons using your text selector
+            show_more_selector = "button:has-text('Show more matches'), a:has-text('Show more matches')"
             
-            # Exhaustive expansion before returning
-            await expand_h2h_sections(page)
+            # 3. Exhaustive expansion loop
+            for _ in range(5): # Loop multiple times to get deeper history
+                buttons = page.locator(show_more_selector)
+                count = await buttons.count()
+                if count == 0: break
+                
+                print(f"      [H2H Expansion] Clicking {count} expansion buttons...")
+                for i in range(count):
+                    try:
+                        btn = buttons.nth(i)
+                        if await btn.is_visible():
+                            await btn.click(timeout=3000)
+                            await asyncio.sleep(0.5)
+                    except: continue
+                    
             return True
         else:
              print(f"      [Extractor] H2H tab selector '{tab_selector}' not visible.")
              return False
-    except Exception as e:
-        print(f"      [Extractor] Failed to activate H2H tab: {e}")
-        return False
-
 
 async def expand_h2h_sections(page: Page):
     """
