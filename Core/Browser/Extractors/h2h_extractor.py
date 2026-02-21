@@ -38,66 +38,68 @@ async def activate_h2h_tab(page: Page) -> bool:
             await asyncio.sleep(2.0)
             await fs_universal_popup_dismissal(page, "fs_h2h_tab")
 
-            # 2. Extract "Show more" buttons using your text selector
-            show_more_selector = "button:has-text('Show more matches'), a:has-text('Show more matches')"
-            
-            # 3. Exhaustive expansion loop
-            for _ in range(5): # Loop multiple times to get deeper history
-                buttons = page.locator(show_more_selector)
-                count = await buttons.count()
-                if count == 0: break
-                
-                print(f"      [H2H Expansion] Clicking {count} expansion buttons...")
-                for i in range(count):
-                    try:
-                        btn = buttons.nth(i)
-                        if await btn.is_visible():
-                            await btn.click(timeout=3000)
-                            await asyncio.sleep(0.5)
-                    except: continue
-                    
+            # 2. Exhaustive expansion before returning
+            await expand_h2h_sections(page)
             return True
         else:
              print(f"      [Extractor] H2H tab selector '{tab_selector}' not visible.")
              return False
+    except Exception as e:
+        print(f"      [Extractor] Failed to activate H2H tab: {e}")
+        return False
+
 
 async def expand_h2h_sections(page: Page):
     """
     Recursively clicks 'Show more' buttons in H2H sections until no more exist.
+    Uses both CSS classes and text-based selectors for maximum robustness.
     """
-    show_more_selector = get_selector("fs_h2h_tab", "h2h_show_more_button") or ".h2h__showMore"
     print(f"      [Extractor] Expanding H2H sections (Exhaustive)...")
     
-    max_clicks = 10 # Safety cap to prevent infinite loops if JS fails
-    clicks = 0
+    # Text-based selector is often more robust across updates
+    show_more_text_sel = "button:has-text('Show more matches'), a:has-text('Show more matches')"
+    # CSS selector from knowledge.json as fallback
+    show_more_css_sel = get_selector("fs_h2h_tab", "h2h_show_more_button") or ".h2h__showMore"
     
-    while clicks < max_clicks:
+    # Comprehensive selector
+    combined_selector = f"{show_more_text_sel}, {show_more_css_sel}"
+    
+    max_loops = 20 # Increased for truly deep history; will break early if nothing found
+    total_clicks = 0
+    
+    for loop in range(max_loops):
         try:
-            # Check for visibility of any 'Show more' button
-            buttons = page.locator(show_more_selector)
+            buttons = page.locator(combined_selector)
             count = await buttons.count()
             
             if count == 0:
                 break
                 
-            visible_any = False
+            clicked_this_loop = 0
             for i in range(count):
-                btn = buttons.nth(i)
-                if await btn.is_visible(timeout=2000):
-                    await btn.click()
-                    await asyncio.sleep(0.8)
-                    visible_any = True
+                try:
+                    btn = buttons.nth(i)
+                    # Check visibility before clicking to avoid invisible element errors
+                    if await btn.is_visible(timeout=2000):
+                        await btn.click()
+                        # Short delay to allow new rows to load
+                        await asyncio.sleep(0.7)
+                        clicked_this_loop += 1
+                except:
+                    continue
             
-            if not visible_any:
+            if clicked_this_loop == 0:
+                # No visible buttons left to click in this loop
                 break
-                
-            clicks += 1
+            
+            total_clicks += clicked_this_loop
         except Exception:
             break
             
-    if clicks > 0:
-        print(f"      [Extractor] H2H expanded (performed {clicks} bulk clicks).")
+    if total_clicks > 0:
+        print(f"      [Extractor] H2H expanded (performed {total_clicks} clicks across sections).")
     else:
+        print(f"      [Extractor] No expansion buttons found or visible.")
         print(f"      [Extractor] No expansion needed or buttons not found.")
 
 
