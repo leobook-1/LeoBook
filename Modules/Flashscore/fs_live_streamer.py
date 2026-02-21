@@ -403,8 +403,8 @@ async def _extract_all_matches(page) -> list:
         print(f"   [Streamer] Status breakdown: {status_counts}")
 
     # Sample first 3 for quick sanity check
-    for m in matches[:3]:
-        print(f"   [DEBUG] {m['home_team']} vs {m['away_team']} | status={m['status']} score={m['home_score']}-{m['away_score']} minute={m['minute']} stage={m['stage_detail']} time={m['match_time']}")
+    #for m in matches[:3]:
+        #print(f"   [DEBUG] {m['home_team']} vs {m['away_team']} | status={m['status']} score={m['home_score']}-{m['away_score']} minute={m['minute']} stage={m['stage_detail']} time={m['match_time']}")
 
     return matches or []
 
