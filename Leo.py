@@ -282,10 +282,11 @@ async def run_utility(args):
 
     elif args.schedule:
         refresh = getattr(args, 'refresh', False)
-        mode = "Refresh" if refresh else "Extract"
+        extract_all = getattr(args, 'all', False)
+        mode = "Full Deep" if extract_all else ("Refresh" if refresh else "Extract")
         print(f"\n  --- LEO: Schedule {mode} ---")
         async with async_playwright() as p:
-            await run_flashscore_schedule_only(p, refresh=refresh)
+            await run_flashscore_schedule_only(p, refresh=refresh, extract_all=extract_all)
 
     elif args.rule_engine:
         from Core.Intelligence.rule_engine_manager import RuleEngineManager

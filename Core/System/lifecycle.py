@@ -133,6 +133,8 @@ Examples:
   python Leo.py --streamer                 Run the live score streamer independently
   python Leo.py --schedule                 Extract schedules only (no predictions)
   python Leo.py --schedule --refresh       Re-extract schedules starting from today
+  python Leo.py --schedule --all           Extract today's schedules + H2H + standings
+  python Leo.py --schedule --refresh --all Extract 7 days of schedules + H2H + standings
   python Leo.py --rule-engine              Show default rule engine info (combine with --list, --set-default, --backtest)
   python Leo.py --rule-engine --list       List all saved rule engines
   python Leo.py --rule-engine --backtest   Progressive backtest default engine
@@ -170,6 +172,8 @@ Examples:
                        help='Extract match schedules only (no predictions)')
     parser.add_argument('--refresh', action='store_true',
                        help='Force re-extract from today (use with --schedule)')
+    parser.add_argument('--all', action='store_true',
+                       help='Also extract H2H + standings per match (use with --schedule)')
 
     # --- Rule Engine Management ---
     parser.add_argument('--rule-engine', action='store_true',
@@ -193,5 +197,7 @@ Examples:
         parser.error("--set-default requires --rule-engine")
     if args.refresh and not args.schedule:
         parser.error("--refresh requires --schedule")
+    if getattr(args, 'all', False) and not args.schedule:
+        parser.error("--all requires --schedule")
     return args
 

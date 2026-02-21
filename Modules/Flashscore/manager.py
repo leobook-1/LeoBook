@@ -210,13 +210,21 @@ async def run_flashscore_analysis(playwright: Playwright):
     print(f"\n--- Data Extraction & Analysis Complete: {total_cycle_predictions} new predictions found. ---")
 
 
-async def run_flashscore_schedule_only(playwright: Playwright, refresh: bool = False):
+async def run_flashscore_schedule_only(playwright: Playwright, refresh: bool = False, extract_all: bool = False):
     """
-    Schedule-only mode: extract match schedules for 7 days, save to DB + sync.
+    Schedule-only mode: extract match schedules, save to DB + sync.
     No predictions, no match-page analysis.
     If refresh=True, ignore resume date and start from today.
+    If extract_all=True, also extract H2H + standings per match.
+      - extract_all alone = today only
+      - extract_all + refresh = 7 days
     """
-    print("\n--- Running Schedule Extraction (No Predictions) ---")
+    days = 7  # default
+    if extract_all and not refresh:
+        days = 1
+    
+    mode_label = "Schedule + H2H + Standings" if extract_all else "Schedule Only"
+    print(f"\n--- Running {mode_label} ({days} day{'s' if days > 1 else ''}) ---")
 
     browser = await playwright.chromium.launch(
         headless=True,
@@ -225,6 +233,7 @@ async def run_flashscore_schedule_only(playwright: Playwright, refresh: bool = F
 
     context = None
     total_saved = 0
+    total_deep = 0
     try:
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -261,7 +270,7 @@ async def run_flashscore_schedule_only(playwright: Playwright, refresh: bool = F
         else:
             print("  [Schedule] Refresh mode — starting from today.")
 
-        for day_offset in range(7):
+        for day_offset in range(days):
             target_date = dt.now(NIGERIA_TZ) + timedelta(days=day_offset)
             target_full = target_date.strftime("%d.%m.%Y")
 
@@ -286,6 +295,109 @@ async def run_flashscore_schedule_only(playwright: Playwright, refresh: bool = F
             total_saved += len(matches_data)
             print(f"  [Schedule] {len(matches_data)} matches for {target_full}.")
 
+            # --- Deep Extraction: H2H + Standings per match ---
+            if extract_all and matches_data:
+                # Filter: deep extraction only for matches at least X hours in the future
+                buffer_h = 1.5 if os.getenv('CODESPACES') == 'true' else 0.5
+                now_limit = dt.now(NIGERIA_TZ) + timedelta(hours=buffer_h)
+                
+                deep_eligible = []
+                for m in matches_data:
+                    if not m.get('match_link'): continue
+                    
+                    # Parse match time to check if it's far enough in the future
+                    try:
+                        m_dt = dt.strptime(f"{m['date']} {m['match_time']}", "%d.%m.%Y %H:%M").replace(tzinfo=NIGERIA_TZ)
+                        if m_dt >= now_limit:
+                            deep_eligible.append(m)
+                    except:
+                        # If parsing fails, skip deep extraction for safety
+                        continue
+
+                print(f"\n  [Deep] Eligible for H2H + Standings: {len(deep_eligible)}/{len(matches_data)} matches (Buffer: {buffer_h}h)")
+
+                from Core.Browser.Extractors.h2h_extractor import activate_h2h_tab, extract_h2h_data, save_extracted_h2h_to_schedules
+                from Core.Browser.Extractors.standings_extractor import activate_standings_tab, extract_standings_data
+                from Data.Access.db_helpers import save_standings
+                from .fs_utils import retry_extraction
+
+                for i, match in enumerate(deep_eligible):
+                    label = f"{match.get('home_team', '?')} vs {match.get('away_team', '?')}"
+                    try:
+                        print(f"    [{i+1}/{len(deep_eligible)}] {label}")
+                        await page.goto(match['match_link'], wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT)
+                        await asyncio.sleep(2.0)
+                        await fs_universal_popup_dismissal(page, "fs_match_page")
+
+                        # --- H2H ---
+                        if await activate_h2h_tab(page):
+                            try:
+                                # Expand "Show more" buttons for deeper history
+                                show_more_sel = ".h2h__section .h2h__showMore"
+                                for _ in range(2):
+                                    buttons = page.locator(show_more_sel)
+                                    btn_count = await buttons.count()
+                                    for j in range(btn_count):
+                                        try:
+                                            btn = buttons.nth(j)
+                                            if await btn.is_visible():
+                                                await btn.click(timeout=5000)
+                                                await asyncio.sleep(0.8)
+                                        except:
+                                            continue
+
+                                await asyncio.sleep(1.0)
+                                h2h = await retry_extraction(
+                                    extract_h2h_data, page,
+                                    match.get('home_team', ''), match.get('away_team', ''),
+                                    "fs_h2h_tab"
+                                )
+                                h2h_total = sum(len(h2h.get(k, [])) for k in ('home_last_10_matches', 'away_last_10_matches', 'head_to_head'))
+                                print(f"      [H2H] {h2h_total} records")
+                                await save_extracted_h2h_to_schedules(h2h)
+                            except Exception as e:
+                                print(f"      [H2H Error] {e}")
+                        
+                        # --- Standings ---
+                        if await activate_standings_tab(page):
+                            try:
+                                s_result = await retry_extraction(extract_standings_data, page)
+                                s_data = s_result.get("standings", [])
+                                s_league = s_result.get("region_league", "Unknown")
+                                if s_league == "Unknown":
+                                    s_league = match.get('region_league', 'Unknown')
+                                if s_data and s_league != "Unknown":
+                                    s_url = s_result.get("league_url", "")
+                                    for row in s_data:
+                                        row['url'] = s_url
+                                    save_standings(s_data, s_league)
+                                    print(f"      [Standings] {len(s_data)} rows for {s_league}")
+                            except Exception as e:
+                                print(f"      [Standings Error] {e}")
+
+                        total_deep += 1
+
+                    except Exception as e:
+                        print(f"    [Skip] {label}: {e}")
+                        continue
+                    
+                    # Navigate back to home page for next day (if needed)
+                    # No — we stay on match pages, the day loop re-navigates
+
+                print(f"  [Deep] Completed: {total_deep} matches enriched.")
+
+                # Return to Flashscore home for the next day's navigation
+                if day_offset < days - 1:
+                    await page.goto("https://www.flashscore.com/football/", wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT)
+                    await asyncio.sleep(2)
+                    await fs_universal_popup_dismissal(page, "fs_home_page")
+                    # Re-advance to the correct day
+                    for _ in range(day_offset + 1):
+                        match_row_sel = await SelectorManager.get_selector_auto(page, "fs_home_page", "match_rows")
+                        if not match_row_sel or not await click_next_day(page, match_row_sel):
+                            break
+                        await asyncio.sleep(1)
+
     finally:
         if context is not None:
             await context.close()
@@ -295,4 +407,5 @@ async def run_flashscore_schedule_only(playwright: Playwright, refresh: bool = F
     # Cloud sync
     from Data.Access.sync_manager import run_full_sync
     await run_full_sync(session_name="Schedule Extraction")
-    print(f"\n--- Schedule Extraction Complete: {total_saved} total matches saved. ---")
+    suffix = f" | {total_deep} deep-enriched" if extract_all else ""
+    print(f"\n--- Schedule Extraction Complete: {total_saved} matches saved{suffix}. ---")
