@@ -33,7 +33,7 @@ When the `InteractionEngine` is asked to perform any browser action (e.g., "Clic
   2. **XPath** fallback
   3. **Text content** matching
   4. **Fuzzy** proximity matching
-- **Heatmap Tracking**: Every failed attempt is logged into a **Failure Heatmap** — recording the selector, failure reason ("Element not visible", "Timeout", "Overlay blocking"), and timestamp. This heatmap is sent to the AI in Phase 3 so it doesn't retry broken paths.
+- **Failure Logging (Heatmap)**: Every failed attempt is captured via `log_selector_failure` and permanently logged into the `_failures` key in `knowledge.json` — recording the selector context, failure reason ("Element not visible", "Timeout", "Overlay blocking"), and a human-readable timestamp. This persistent failure state is passed to the AI in Phase 3 so it understands exactly what broke and why, preventing it from suggesting broken paths.
 - **Visual Discovery**: Triggers `VisualAnalyzer` to scrape the DOM for new potential matches based on semantic hints (labels, ARIA attributes, proximity to known elements).
 
 ### Phase 3: AIGO Expert Consultation (Grok API)
@@ -67,7 +67,7 @@ Once a path succeeds, AIGO **permanently heals** the codebase:
 | **Interaction Engine** | `interaction_engine.py` | Executor — handles the 5-phase cascade, retries, and path switching | 100% of browser actions |
 | **Visual Analyzer** | `visual_analyzer.py` | Vision — combines screenshots + DOM for element discovery | ~20-30% of interactions |
 | **Memory Manager** | `memory_manager.py` | Experience — stores success/failure patterns for reinforcement learning | 100% of interactions |
-| **Selector DB** | `selector_db.py` | Registry — UPSERT operations on `knowledge.json` selectors | On every AI-discovered path |
+| **Selector DB** | `selector_db.py` | Registry — UPSERT operations on `knowledge.json` selectors, handles failure logging (`log_selector_failure`) | On every AI path / failure |
 | **Unified Matcher** | `unified_matcher.py` | Multi-strategy matcher — CSS → XPath → text → fuzzy | ~40-60% of interactions |
 | **Popup Handler** | `popup_handler.py` | Overlay removal — intelligent popup/modal/overlay dismissal | Pre-emptive on every page |
 

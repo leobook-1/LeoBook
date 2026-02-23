@@ -148,10 +148,10 @@ flowchart LR
     FB --> HARVEST --> CSV
     CSV --> BOOK --> FB
     GROK --> PREDICT
-    HARVEST -.->|"selector failure"| AIGO
-    BOOK -.->|"UI failure"| AIGO
+    HARVEST -.->|"selector failure logs"| AIGO
+    BOOK -.->|"UI failure logs"| AIGO
     AIGO --> GROK
-    AIGO -->|"persist selector"| KJ
+    AIGO -->|"persist selector & log_selector_failure"| KJ
     CSV <--> SB
     SB --> MOBILE
     MONITOR --> CSV
