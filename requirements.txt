@@ -6,14 +6,13 @@ scikit-learn
 requests
 gguf
 RapidFuzz
-google-genai
+google-genai>=1.64.0
 aiohttp
 nest-asyncio
 fuzzywuzzy
 python-Levenshtein>=0.12.2
 pytz
 psutil
-Pillow
 
 # Supabase sync dependencies
 supabase>=2.0.0

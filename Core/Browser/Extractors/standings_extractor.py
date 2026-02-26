@@ -8,7 +8,6 @@ from playwright.async_api import Page, TimeoutError, ElementHandle
 import re
 from typing import Dict, Any, List
 from Core.Intelligence.selector_manager import SelectorManager
-from Core.Intelligence.aigo_suite import AIGOSuite
 from Core.Browser.site_helpers import fs_universal_popup_dismissal
 import asyncio
 
@@ -70,7 +69,6 @@ async def _post_activation_prep(page: Page):
     await fs_universal_popup_dismissal(page, "fs_standings_tab")
     await asyncio.sleep(3.0)
 
-@AIGOSuite.aigo_retry(max_retries=1, delay=2.0, context_key="fs_standings_tab", element_key="standings_row")
 async def extract_standings_data(page: Page, context: str = "fs_standings_tab") -> Dict[str, Any]:
     """
     Extracts essential standings data: position, team, stats, and league info.

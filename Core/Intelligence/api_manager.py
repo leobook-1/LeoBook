@@ -116,33 +116,30 @@ async def grok_api_call(prompt_content, generation_config=None, **kwargs):
 async def gemini_api_call(prompt_content, generation_config=None, **kwargs):
     """
     Calls Google Gemini API for AI analysis.
-    Uses asyncio.to_thread to keep the event loop running during the blocking request.
+    Uses google-genai SDK v1.64+ (Client-based API).
     """
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     if not gemini_api_key:
         raise ValueError("GEMINI_API_KEY environment variable not set")
 
-    # Configure Gemini
     import google.genai as genai
-    genai.configure(api_key=gemini_api_key)
-    model = genai.GenerativeModel('gemini-2.5-pro')
+    from google.genai import types
+
+    client = genai.Client(api_key=gemini_api_key)
 
     # 1. Parse Input (Text + Images)
     contents = []
 
     if isinstance(prompt_content, str):
-        contents.append(prompt_content)
+        contents.append(types.Part.from_text(text=prompt_content))
     elif isinstance(prompt_content, list):
         for item in prompt_content:
             if isinstance(item, str):
-                contents.append(item)
+                contents.append(types.Part.from_text(text=item))
             elif isinstance(item, dict):
-                import PIL.Image
-                import io
-                
                 b64_data = None
                 raw_bytes = None
-                
+
                 if "inline_data" in item:
                     b64_data = item["inline_data"].get("data")
                 elif "data" in item:
@@ -151,17 +148,41 @@ async def gemini_api_call(prompt_content, generation_config=None, **kwargs):
                         raw_bytes = data
                     else:
                         b64_data = data
-                        
+
                 if b64_data:
                     raw_bytes = base64.b64decode(b64_data)
-                    
-                if raw_bytes:
-                    image = PIL.Image.open(io.BytesIO(raw_bytes))
-                    contents.append(image)
 
-    # 2. Execute Request
+                if raw_bytes:
+                    contents.append(types.Part.from_bytes(
+                        data=raw_bytes,
+                        mime_type="image/png"
+                    ))
+
+    # 2. Build config
+    config_kwargs = {}
+    if generation_config:
+        if hasattr(generation_config, 'temperature'):
+            config_kwargs['temperature'] = generation_config.temperature
+        elif isinstance(generation_config, dict) and 'temperature' in generation_config:
+            config_kwargs['temperature'] = generation_config['temperature']
+
+        mime = None
+        if hasattr(generation_config, 'response_mime_type'):
+            mime = generation_config.response_mime_type
+        elif isinstance(generation_config, dict):
+            mime = generation_config.get('response_mime_type')
+        if mime:
+            config_kwargs['response_mime_type'] = mime
+
+    gen_config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
+
+    # 3. Execute Request
     def _make_gemini_request():
-        return model.generate_content(contents, generation_config=generation_config)
+        return client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents,
+            config=gen_config,
+        )
 
     response = await asyncio.to_thread(_make_gemini_request)
 

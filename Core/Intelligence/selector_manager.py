@@ -209,6 +209,9 @@ class SelectorManager:
 
         print(f"    [On-Demand Heal] Selector '{element_key}' failed in '{context_key}'. Attempting TARGETED repair...")
 
+        # Capture the OLD (broken) selector before healing
+        old_selector = knowledge_db.get(context_key, {}).get(element_key, "")
+
         try:
             from .page_analyzer import PageAnalyzer
             content_is_correct = await PageAnalyzer.verify_page_context(page, context_key)
@@ -225,9 +228,14 @@ class SelectorManager:
             )
 
             healed_selector = knowledge_db.get(context_key, {}).get(element_key, "")
-            if healed_selector:
+
+            # Guard: if the selector didn't actually change, healing failed
+            if healed_selector and healed_selector != old_selector:
                 print(f"    [Heal Success] New selector for '{element_key}': {healed_selector}")
                 return str(healed_selector)
+            elif healed_selector == old_selector:
+                print(f"    [Heal Failed] Selector unchanged ('{healed_selector}') — AI providers likely offline. Skipping recovery.")
+                return ""
             else:
                 print(f"    [Heal Skipped] '{element_key}' not visible in current page state. May require tab navigation first.")
                 return ""
