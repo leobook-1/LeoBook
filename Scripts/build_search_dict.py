@@ -194,8 +194,7 @@ def _call_llm(provider: dict, prompt: str) -> list:
 def query_llm_for_metadata(items, item_type="team", retries=2):
     """
     Queries LLM providers in adaptive priority order via LLMHealthManager.
-    Skips providers known to be inactive (e.g. Grok returning 403).
-    Each active provider gets `retries` attempts before falling through.
+    Supports multi-key Gemini rotation: rotates to next key on 429.
     """
     if not items:
         return []
@@ -206,27 +205,67 @@ def query_llm_for_metadata(items, item_type="team", retries=2):
     prompt = _build_prompt(items, item_type)
 
     for provider_name in ordered:
-        provider = health_manager.get_provider_config(provider_name)
-        if not provider.get("api_key"):
-            print(f"  [Skip] {provider_name} — no API key configured.")
-            continue
-
         if not health_manager.is_provider_active(provider_name):
             print(f"  [Skip] {provider_name} — inactive per health check.")
             continue
 
-        for attempt in range(1, retries + 1):
-            try:
-                print(f"  [LLM] {provider_name} attempt {attempt}/{retries}...")
-                results = _call_llm(provider, prompt)
-                if results:
-                    print(f"  [LLM] {provider_name} returned {len(results)} items.")
-                    return results
-            except Exception as e:
-                print(f"  [Warning] {provider_name} attempt {attempt}/{retries} failed: {e}")
-                time.sleep(3 * attempt)
+        if provider_name == "Gemini":
+            # Multi-key rotation: try up to 3 different keys on 429
+            max_key_tries = min(3, len(health_manager._gemini_active or health_manager._gemini_keys))
+            for key_attempt in range(max_key_tries):
+                api_key = health_manager.get_next_gemini_key()
+                if not api_key:
+                    break
+                provider = {
+                    "name": "Gemini",
+                    "api_key": api_key,
+                    "api_url": health_manager.GEMINI_API_URL,
+                    "model": health_manager.GEMINI_MODEL,
+                }
+                for attempt in range(1, retries + 1):
+                    try:
+                        key_suffix = api_key[-4:]
+                        print(f"  [LLM] Gemini (key ...{key_suffix}) attempt {attempt}/{retries}...")
+                        results = _call_llm(provider, prompt)
+                        if results:
+                            print(f"  [LLM] Gemini returned {len(results)} items.")
+                            return results
+                    except Exception as e:
+                        err_str = str(e)
+                        if "429" in err_str:
+                            health_manager.on_gemini_429(api_key)
+                            print(f"  [LLM] Gemini key ...{key_suffix} rate-limited, rotating...")
+                            break  # Try next key
+                        print(f"  [Warning] Gemini attempt {attempt}/{retries} failed: {e}")
+                        time.sleep(3 * attempt)
+                else:
+                    continue  # All retries exhausted for this key, try next
+                continue  # Key was 429'd, try next key
 
-        print(f"  [Fallback] {provider_name} exhausted. Trying next provider...")
+            print(f"  [Fallback] Gemini exhausted. Trying next provider...")
+
+        elif provider_name == "Grok":
+            grok_key = os.getenv("GROK_API_KEY", "")
+            if not grok_key:
+                print(f"  [Skip] Grok — no API key configured.")
+                continue
+            provider = {
+                "name": "Grok",
+                "api_key": grok_key,
+                "api_url": health_manager.GROK_API_URL,
+                "model": health_manager.GROK_MODEL,
+            }
+            for attempt in range(1, retries + 1):
+                try:
+                    print(f"  [LLM] Grok attempt {attempt}/{retries}...")
+                    results = _call_llm(provider, prompt)
+                    if results:
+                        print(f"  [LLM] Grok returned {len(results)} items.")
+                        return results
+                except Exception as e:
+                    print(f"  [Warning] Grok attempt {attempt}/{retries} failed: {e}")
+                    time.sleep(3 * attempt)
+            print(f"  [Fallback] Grok exhausted. Trying next provider...")
 
     print(f"  [Error] All LLM providers failed for {len(items)} {item_type}(s).")
     return []

@@ -130,30 +130,8 @@ async def extract_match_page_metadata(page: Page, match_data: dict) -> dict:
                 except Exception as meta_e:
                     print(f"      [Warning] League metadata extraction failed: {meta_e}")
 
-                # --- Harvest match URLs from results AND fixtures tabs ---
-                try:
-                    from Core.Browser.Extractors.league_page_extractor import extract_league_match_urls
-                    for mode in ["results", "fixtures"]:
-                        harvest_urls = await extract_league_match_urls(page, league_url, mode=mode)
-                        if harvest_urls:
-                            added = 0
-                            for m_url in harvest_urls:
-                                full_url = _standardize_url(m_url)
-                                fid = m_url.split('/')[2] if '/match/' in m_url else ''
-                                if fid:
-                                    save_schedule_entry({
-                                        'fixture_id': fid,
-                                        'date': '',
-                                        'match_time': '',
-                                        'region_league': computed_region_league,
-                                        'match_status': 'finished' if mode == "results" else "scheduled",
-                                        'match_link': full_url
-                                    })
-                                    added += 1
-                            if added:
-                                print(f"      [League Harvest] {added} {mode} URLs saved for {clean_league}")
-                except Exception as harvest_e:
-                    print(f"      [Warning] League harvest failed: {harvest_e}")
+                # NOTE: League match URL harvesting (results/fixtures) is handled by
+                # enrich_league_inline in fs_processor.py — not duplicated here.
 
                 # --- Navigate back to match page for caller ---
                 match_link = match_data.get('match_link', '')
