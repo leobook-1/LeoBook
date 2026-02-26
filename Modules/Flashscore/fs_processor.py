@@ -26,6 +26,9 @@ from Core.Utils.constants import NAVIGATION_TIMEOUT, WAIT_FOR_LOAD_STATE_TIMEOUT
 from Core.Intelligence.rule_engine import RuleEngine
 from .fs_utils import retry_extraction
 
+# Cache of league IDs already enriched in this cycle (avoid duplicate page visits)
+_enriched_leagues = set()
+
 async def process_match_task(match_data: dict, browser: Browser):
     """
     Worker function to process a single match in a new page/context.
@@ -116,12 +119,15 @@ async def process_match_task(match_data: dict, browser: Browser):
         region_name = meta_result.get('region_name', '')
 
         league_inline_result = {}
-        if league_url and league_id:
+        if league_url and league_id and league_id not in _enriched_leagues:
             try:
                 from Scripts.enrich_leagues import enrich_league_inline
                 league_inline_result = await enrich_league_inline(page, league_url, league_id, league_name, region_name) or {}
+                _enriched_leagues.add(league_id)
             except Exception as e:
                 print(f"      [Enrich] League enrichment error (non-fatal): {e}")
+        elif league_id in _enriched_leagues:
+            print(f"      [Enrich] League '{league_name}' already enriched this cycle — skipping.")
 
         # --- Per-Match Search Dict (v3.7) ---
         # Collect ALL discovered teams from league page + standings + match

@@ -271,7 +271,9 @@ def query_llm_for_metadata(items, item_type="team", retries=2):
     return []
 
 async def async_query_llm_for_metadata(items, item_type="team", retries=2):
-    """Async wrapper for query_llm_for_metadata using to_thread."""
+    """Async wrapper that ensures health manager is initialized before sync LLM call."""
+    from Core.Intelligence.llm_health_manager import health_manager
+    await health_manager.ensure_initialized()
     return await asyncio.to_thread(query_llm_for_metadata, items, item_type, retries)
 
 # Backward-compatible alias

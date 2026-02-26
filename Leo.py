@@ -449,8 +449,13 @@ async def main():
         init_csvs()
 
         async with async_playwright() as p:
-            # Spawn live score streamer in parallel
-            streamer_task = asyncio.create_task(live_score_streamer(p))
+            # Spawn live score streamer with its OWN Playwright instance
+            # (prevents browser recycling in streamer from crashing main pipeline)
+            async def _isolated_streamer():
+                async with async_playwright() as streamer_pw:
+                    await live_score_streamer(streamer_pw)
+
+            streamer_task = asyncio.create_task(_isolated_streamer())
 
             while True:
                 try:
