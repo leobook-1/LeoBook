@@ -323,8 +323,8 @@ class MatchModel {
       xgHome: xgHome,
       xgAway: xgAway,
       reasonTags: reasonTags,
-      homeFormN: (row['home_form_n'] as num?)?.toInt(),
-      awayFormN: (row['away_form_n'] as num?)?.toInt(),
+      homeFormN: int.tryParse(row['home_form_n']?.toString() ?? ''),
+      awayFormN: int.tryParse(row['away_form_n']?.toString() ?? ''),
       outcomeCorrect: outcomeCorrect,
     );
   }

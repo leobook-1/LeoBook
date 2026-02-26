@@ -204,4 +204,40 @@ class DataRepository {
       return matches;
     });
   }
+
+  Stream<List<MatchModel>> watchSchedules({DateTime? date}) {
+    var query = _supabase.from('schedules').stream(primaryKey: ['fixture_id']);
+
+    return query.map((rows) {
+      var matches = rows.map((row) => MatchModel.fromCsv(row)).toList();
+      if (date != null) {
+        final dateStr =
+            "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+        matches = matches.where((m) => m.date == dateStr).toList();
+      }
+      return matches;
+    });
+  }
+
+  Stream<List<StandingModel>> watchStandings(String leagueName) {
+    return _supabase
+        .from('standings')
+        .stream(primaryKey: ['standings_key'])
+        .eq('region_league', leagueName)
+        .map((rows) => rows.map((row) => StandingModel.fromJson(row)).toList());
+  }
+
+  Stream<Map<String, String>> watchTeamCrestUpdates() {
+    return _supabase
+        .from('teams')
+        .stream(primaryKey: ['team_name']).map((rows) {
+      final Map<String, String> crests = {};
+      for (var row in rows) {
+        if (row['team_name'] != null && row['team_crest'] != null) {
+          crests[row['team_name'].toString()] = row['team_crest'].toString();
+        }
+      }
+      return crests;
+    });
+  }
 }
