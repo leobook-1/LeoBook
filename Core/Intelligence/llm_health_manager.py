@@ -104,6 +104,15 @@ class LLMHealthManager:
             if remaining == 0:
                 print(f"    [LLM Health] ⚠ All {len(self._gemini_keys)} Gemini keys exhausted!")
 
+    def on_gemini_403(self, failed_key: str):
+        """Called when a Gemini key hits 403. Permanently remove from ALL pools."""
+        if failed_key in self._gemini_active:
+            self._gemini_active.remove(failed_key)
+        if failed_key in self._gemini_keys:
+            self._gemini_keys.remove(failed_key)
+        print(f"    [LLM Health] Gemini key permanently removed (403 Forbidden). "
+              f"{len(self._gemini_active)} active, {len(self._gemini_keys)} total.")
+
     # ── Internals ───────────────────────────────────────────────
 
     async def _ping_all(self):

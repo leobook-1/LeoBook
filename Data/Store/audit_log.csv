@@ -1,4 +1,31 @@
 id,timestamp,event_type,description,balance_before,balance_after,stake,status,last_updated
 6a46f645-6aee-49df-938a-52888f6ab6dd,2026-02-26T13:42:08+00:00,CYCLE_START,Cycle #1 initiated.,,,,success,1970-01-01T00:00:00+00:00
 6239c247-c5e5-4195-b37d-2959f73f168f,2026-02-26T13:42:10+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,,,,success,1970-01-01T00:00:00+00:00
-e31f0ada-114b-494e-b952-60619da99ef1,2026-02-26 14:56:59,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",,,,success
+e31f0ada-114b-494e-b952-60619da99ef1,2026-02-26 14:56:59,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",,,,success,
+eeedfda5-4ed0-4a58-84cb-0491ad4ef97c,2026-02-26T14:08:44+00:00,CYCLE_START,Cycle #1 initiated.,None,None,None,success,1970-01-01T00:00:00+00:00
+8fb7f933-e9bd-489b-8055-c90f8bac5628,2026-02-26T14:08:46+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,None,None,None,success,1970-01-01T00:00:00+00:00
+c274bbf2-df85-4fda-b1ef-bed170f4e6ea,2026-02-26T14:08:47+00:00,SYSTEM_SYNC,"Full Chapter Sync (Prologue Final): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+a1b47ad6-3245-4211-84f4-58fc8f94d2ed,2026-02-26T14:08:47+00:00,PROLOGUE_P2,Accuracy generated and Prologue sync completed.,None,None,None,success,1970-01-01T00:00:00+00:00
+b2b4aab5-7b96-414b-86da-82f0e8814489,2026-02-26T14:08:47+00:00,STREAMER_START,Mobile live score streamer v3.2 initialized (Isolation: True).,None,None,None,success,1970-01-01T00:00:00+00:00
+0d2b17d6-ed74-484a-821f-d204800efcec,2026-02-26T14:32:24+00:00,CYCLE_START,Cycle #1 initiated.,None,None,None,success,1970-01-01T00:00:00+00:00
+98bb54c4-4bbb-408f-8cd3-29b9af57e2eb,2026-02-26T14:32:28+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,None,None,None,success,1970-01-01T00:00:00+00:00
+2bd31d85-58ae-48fb-a035-3b0f17749e46,2026-02-26T14:32:30+00:00,SYSTEM_SYNC,"Full Chapter Sync (Prologue Final): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+faaba0cf-3ad9-477c-8efc-4187cfc2e54b,2026-02-26T14:32:30+00:00,PROLOGUE_P2,Accuracy generated and Prologue sync completed.,None,None,None,success,1970-01-01T00:00:00+00:00
+6cbc2a31-3aeb-4177-b5cc-83e599784273,2026-02-26T14:32:31+00:00,STREAMER_START,Mobile live score streamer v3.2 initialized (Isolation: True).,None,None,None,success,1970-01-01T00:00:00+00:00
+46ca0b22-467c-4999-b15f-db75d5a6d7d2,2026-02-26T14:41:54+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+25a108ee-c7a5-48bd-831d-086c6a529f0b,2026-02-26T14:53:05+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+72a133d1-0496-4002-ae3c-c5ef9beff219,2026-02-26T15:09:44+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+ba959e17-4ad6-4691-b1e7-d01a4f173069,2026-02-26T15:20:49+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+bdd9e0b5-11ef-451d-b50b-bd0ee4b1a523,2026-02-26T15:29:54+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+c4c290be-d3de-41ac-8657-25d24be2865b,2026-02-26T15:40:32+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+26d0f390-c8da-4793-8f85-e193a0756b25,2026-02-26T15:49:33+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+1c6197c2-e7a7-476c-8ad4-0574a4e8fc18,2026-02-26T16:00:39+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+6ca016ae-fb36-4e97-acc5-9155c0453794,2026-02-26T16:11:14+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+d813a87a-ac75-47fe-b593-cb19c6674907,2026-02-26T16:20:21+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+7d0313ba-d386-4c02-93af-c6a4a939e3de,2026-02-26T16:21:43+00:00,SYSTEM_SYNC,"Full Chapter Sync (Periodic): 12 passed, 0 failed.",None,None,None,success,1970-01-01T00:00:00+00:00
+9c8dfa57-c431-4bb3-af96-345057eccfa2,2026-02-26T16:29:55+00:00,CH1_P1,Failed: BrowserType.launch: Connection closed while reading from the driver,None,None,None,failed,1970-01-01T00:00:00+00:00
+10729941-b253-4e0c-8a3a-69e855b3b8d1,2026-02-26T16:48:41+00:00,STREAMER_START,Mobile live score streamer v3.2 initialized (Isolation: False).,None,None,None,success,1970-01-01T00:00:00+00:00
+c2486705-3b6d-471a-a0e0-d27503238187,2026-02-26T17:57:06+00:00,CYCLE_START,Cycle #1 initiated.,None,None,None,success,1970-01-01T00:00:00+00:00
+c25441fb-74d8-4298-99fe-847727470534,2026-02-26T17:57:21+00:00,PROLOGUE_P1,Cloud handshake and prediction review completed.,None,None,None,success,1970-01-01T00:00:00+00:00
+c04ff758-525f-4784-bf67-b3a30c5379f7,2026-02-26T17:57:21+00:00,ACCURACY_REPORT,"Metrics: Vol=14, WR=35.7%, ROI=0.0%",None,None,None,success,1970-01-01T00:00:00+00:00
+9333bdf6-3044-4569-be02-03521b652786,2026-02-26 21:30:04,SYSTEM_SYNC,"Full Chapter Sync (Manual Sync): 12 passed, 0 failed.",,,,success

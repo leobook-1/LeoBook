@@ -236,6 +236,10 @@ def query_llm_for_metadata(items, item_type="team", retries=2):
                             health_manager.on_gemini_429(api_key)
                             print(f"  [LLM] Gemini key ...{key_suffix} rate-limited, rotating...")
                             break  # Try next key
+                        elif "403" in err_str:
+                            health_manager.on_gemini_403(api_key)
+                            print(f"  [LLM] Gemini key ...{key_suffix} permanently dead (403), removing...")
+                            break  # Try next key
                         print(f"  [Warning] Gemini attempt {attempt}/{retries} failed: {e}")
                         time.sleep(3 * attempt)
                 else:
@@ -715,13 +719,32 @@ async def enrich_batch_teams_search_dict(team_pairs: list, batch_size: int = 10)
 
     # 2. Process in batches
     total_enriched = 0
+    consecutive_failures = 0
     for i in range(0, len(unenriched), batch_size):
+        # Circuit-breaker: abort if no LLM providers are available
+        from Core.Intelligence.llm_health_manager import health_manager
+        if not health_manager._gemini_active and not getattr(health_manager, '_grok_active', False):
+            remaining = len(unenriched) - i
+            print(f"    [SearchDict Batch] ⚠ No LLM providers available — skipping remaining {remaining} teams.")
+            break
+
         batch = unenriched[i:i + batch_size]
         batch_names = [t['team_name'] for t in batch]
         batch_id_map = {t['team_name']: t['team_id'] for t in batch}
 
         try:
             results = await async_query_llm_for_metadata(batch_names, item_type="team")
+
+            # Circuit-breaker: track consecutive empty results
+            if not results:
+                consecutive_failures += 1
+                if consecutive_failures >= 3:
+                    remaining = len(unenriched) - i - batch_size
+                    print(f"    [SearchDict Batch] ⚠ {consecutive_failures} consecutive LLM failures — aborting enrichment ({remaining} teams remaining).")
+                    break
+                continue
+            consecutive_failures = 0
+
             updates = {}
             for idx, item in enumerate(results):
                 # Prefer LLM's input_name for mapping; fall back to index

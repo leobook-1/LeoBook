@@ -336,6 +336,8 @@ class SyncManager:
             pbar.close()
             logger.info(f"    [SYNC] Upserted {len(deduped)} rows to {table_name}.")
         except Exception as e:
+            pbar.close()
+            print(f"    [x] Upsert failed for {table_name}: {e}")
             logger.error(f"    [x] Upsert failed: {e}")
 
     async def _verify_sync_parity(self, table_key: str, pushed_ids: List[str], sample_size: int = 10):
