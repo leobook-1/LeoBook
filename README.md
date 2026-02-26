@@ -3,7 +3,7 @@
 **Developer**: Matterialless LLC
 **Chief Engineer**: Emenike Chinenye James
 **Powered by**: Grok 4.1 & Gemini 2.5 Flash
-**Architecture**: High-Velocity Concurrent Architecture v3.5.1 (Shared Locking + Parallel Enrichment + Match Data)
+**Architecture**: High-Velocity Concurrent Architecture v3.6 (Per-Match Sequential Pipeline)
 
 ---
 
@@ -22,23 +22,24 @@ For the complete file inventory and step-by-step execution trace, see [LeoBook_T
 
 ---
 
-## System Architecture (v3.2 Concurrent)
+## System Architecture (v3.6 Per-Match Pipeline)
 
 ```
 Leo.py (Orchestrator)
-├── Phase 1 (Sequential): Cloud Sync → Outcome Review → Accuracy Report
-├── Phase 2 (Parallel Execution):
-│   ├── Task A: High-Velocity League Enrichment (Multi-Page)
-│   ├── Task B: Async Search Dictionary Building
-│   └── Task C: Main Chapter Pipeline (Extraction → Adaptive Prediction → Booking)
-├── Phase 3 (Sequential): Chief Engineer Oversight & Withdrawal Management
+├── Phase 1 (Sequential Prerequisite):
+│   └── Cloud Sync → Outcome Review → Accuracy Report
+├── Phase 2 (Parallel Match Pipeline):
+│   └── [Match Worker Node] × MAX_CONCURRENCY
+│       └── H2H/Standings → League Enrichment → Search Dict → Prediction
+├── Phase 3 (Sequential Finality):
+│   └── Chief Engineer Oversight → Withdrawal Management
 └── Live Streamer: Background 60s LIVE score streaming → status propagation
 ```
 
-### Key Innovations (v3.5)
-- **High-Velocity Concurrency**: `Leo.py` uses `asyncio.gather` for parallel pipeline execution. `enrich_leagues.py` uses multi-page Playwright concurrency for 5x faster processing.
-- **Shared Data Integrity**: Implemented a global `CSV_LOCK` (Asyncio Lock) in `db_helpers.py` ensuring thread-safe access to persistent stores during parallel operations.
-- **Async Search Dict**: The search dictionary engine is now fully asynchronous, integrating seamlessly with the high-speed enrichment pipeline.
+### Key Innovations (v3.6)
+- **Per-Match Sequential Pipeline**: Each match is processed as a complete unit (extract → enrich → search dict → predict) before moving to the next. This ensures 100% data completeness for every single prediction.
+- **Dynamic Concurrency**: `MAX_CONCURRENCY` now controls how many autonomous match worker nodes run in parallel, maximizing hardware utilization.
+- **Shared Data Integrity**: Protected by a global `CSV_LOCK` (Asyncio Lock) in `db_helpers.py` for collision-free parallel persistence.
 - **Incremental Persistence**: Data is written per-item, ensuring zero loss if a cycle is interrupted.
 - **Hash-Based Identity**: URL hash-based `league_id` for 100% collision-free mapping and stable history tracking.
 - **Dual-LLM Fallback**: Logic enrichment now uses Grok as primary and Gemini as secondary fallback for maximum reliability.

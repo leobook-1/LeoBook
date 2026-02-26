@@ -1,6 +1,6 @@
 # Supabase Setup Guide
 
-> **Version**: 3.5 · **Last Updated**: 2026-02-26
+> **Version**: 3.6 · **Last Updated**: 2026-02-26
 
 ## Quick Setup (5 minutes)
 
@@ -98,13 +98,13 @@ Leo.py runs SyncManager automatically:
 | `live_scores` | `live_scores.csv` | `fixture_id` | CSV → Supabase (every 60s) |
 | `learning_weights` | `learning_weights.json` | `region_league` | CSV → Supabase (upon weight update) |
 
-### Sync Frequency per Leo.py Cycle (v3.5)
+### Sync Frequency per Leo.py Cycle (v3.6)
 1. **Phase 1 (Sequential)**: `sync_on_startup()` — bi-directional merge
-2. **Phase 2 (Parallel Tasks)**:
-   - **Stream A (Enrichment)**: `run_full_sync("Prologue Final")` — push league/team metadata
-   - **Stream B (Search Dict)**: Real-time metadata syncing (Grok/Gemini enriched)
-   - **Stream C (Chapter 1)**: `run_full_sync("Chapter 1 Final")` — push new predictions
-3. **Ad-hoc**: Parallel modules call `run_full_sync()` protected by `CSV_LOCK`.
+2. **Phase 2 (Parallel Match Workers)**:
+   - **Real-time Enrichment**: League/team metadata pushed immediately after extraction.
+   - **Real-time Search Dict**: LLM-enriched search terms pushed per-match.
+   - **Micro-Batch Sync**: Predictions synced to Supabase every 10 matches processed.
+3. **Ad-hoc**: Long-running modules call `run_full_sync()` protected by `CSV_LOCK`.
 
 ---
 

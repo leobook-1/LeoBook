@@ -1,4 +1,4 @@
-> **Version**: 3.5.1 · **Last Updated**: 2026-02-26 · **Architecture**: High-Velocity Concurrent Architecture (Shared Locking + Parallel Pipeline)
+> **Version**: 3.6 · **Last Updated**: 2026-02-26 · **Architecture**: High-Velocity Concurrent Architecture (Shared Locking + Per-Match Sequential Pipeline)
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ LeoBook is a **fully autonomous sports prediction and betting system** comprised
 | **Backend (Leo.py)** | Python 3.12 + Playwright | Autonomous data extraction, rule-based prediction, odds harvesting, bet placement, withdrawal management, and system health monitoring |
 | **Frontend (leobookapp)** | Flutter/Dart | Elite dashboard with "Telegram-grade" density, liquid glass aesthetics, and proportional scaling |
 
-**Leo.py** is a **pure orchestrator** — it contains zero business logic. All logic lives in the modules it imports. It runs in an infinite loop, executing a cycle every 6h. Starting v3.5, the engine uses **High-Velocity Concurrent Execution** via `asyncio.gather` and multi-page Playwright processing, protected by a global `CSV_LOCK` for storage integrity.
+**Leo.py** is a **pure orchestrator** — it contains zero business logic. All logic lives in the modules it imports. It runs in an infinite loop, executing a cycle every 6h. Starting v3.6, the engine uses **High-Velocity Concurrent Execution** via a per-match sequential pipeline, protected by a global `CSV_LOCK` for storage integrity.
 
 ---
 
@@ -32,7 +32,7 @@ LeoBook is a **fully autonomous sports prediction and betting system** comprised
 | `Leo.py` | Central orchestrator — runs the entire system in a loop | **Entrypoint** |
 | `.env` | API keys (Grok, Supabase), config (`LEO_CYCLE_WAIT_HOURS`, etc.) | ✅ via `dotenv` |
 | `AIGO_Learning_Guide.md` | Documentation for the AIGO (AI Operator) subsystem | — |
-| `leobook_algorithm.md` | Prediction algorithm whitepaper (v3.0) | — |
+| `leobook_algorithm.md` | Prediction algorithm whitepaper (v3.6) | — |
 | `SUPABASE_SETUP.md` | Supabase setup instructions | — |
 
 ---
@@ -62,16 +62,16 @@ The v3.0 rebuild implements a **Constraints-Based Design** system for uniform sc
 
 ## 3. Leo.py — Step-by-Step Execution Flow
 
-Leo.py orchestrates 3 main chapters sequentially:
+Leo.py orchestrates 3 main phases sequentially:
 
 ### Startup Flow
 1. **Singleton Check**: Ensure only one instance runs.
 2. **CSV Init**: Create local databases if missing.
 3. **Browser Engine**: Launch Playwright context.
 
-### Per-Cycle Logic (6h Cycle) — Concurrent Engine (v3.2)
+### Per-Cycle Logic (6h Cycle) — Per-Match Pipeline (v3.6)
 
-Leo.py splits the cycle into three phases: Sequential Prep, Concurrent Execution, and Sequential Oversight.
+Leo.py splits the cycle into three phases: Sequential Prep, Parallel Match Pipeline, and Sequential Finality.
 
 #### Phase 1: Sequential Preparation (Prerequisite)
 | # | Phase | Module Called | Action |
@@ -79,14 +79,12 @@ Leo.py splits the cycle into three phases: Sequential Prep, Concurrent Execution
 | 1 | **Prologue P1** | `SyncManager` | Bi-directional Supabase handshake (Sync on Startup). |
 | 2 | **Prologue P1** | `outcome_reviewer` | Match score matching for results + Accuracy Report. |
 
-#### Phase 2: Parallel Pipeline (High-Velocity Execution)
-| Execution Stream | Phase | Module Called | Action | Resume Logic |
+#### Phase 2: Parallel Match Pipeline (High-Velocity Execution)
+| Execution Stream | Phase | Process Unit | Action | Concurrency |
 |:--- | :--- | :--- | :--- | :--- |
-| Stream A | **Enrichment** | `enrich_leagues.py` | Multi-page Parallel League Enrichment (Playwright). | Hash-based resume logic. |
-| Stream B | **Search Dict** | `build_search_dict.py` | Async team/league metadata enrichment & dictionary building. | Skip if already enriched. |
-| Stream C | **Chapter 1** | `manager.py` | Main Chapter Pipeline: Extraction → Adaptive Prediction → Booking. | Skip if `fixture_id` already predicted. |
+| Parallel Node | **Match Processor** | `process_match_task` | Sequential: H2H → Standings → Metadata → League Enrichment → Search Dict → Predict. | `MAX_CONCURRENCY` |
 
-#### Phase 3: Sequential Oversight (Finality)
+#### Phase 3: Sequential Finality (Oversight)
 | # | Phase | Module Called | Action |
 |---|-------|-------------|--------|
 | 1 | **Chapter 3** | `monitoring.py` | Health check, oversight reporting, and withdrawal management. |

@@ -1,4 +1,4 @@
-# LeoBook Developer RuleBook v3.5
+# LeoBook Developer RuleBook v3.6
 
 > **This document is LAW.** Every developer and AI agent working on LeoBook MUST follow these rules without exception. Violations will break the system.
 
@@ -34,11 +34,12 @@ Every page function (`run_prologue_p1`, `run_chapter_1_p2`, etc.) MUST call `awa
 ```
 Prologue P1: Cloud Handshake & Review    → sync_on_startup + review
 Prologue P2: Final Sync & Cleanup        → accuracy + sync
-Chapter 1 P1: Flashscore Extraction      → extract + enrich (JIT) + predict (Adaptive) + sync
-Chapter 1 P2: Odds Harvesting            → harvest + sync
-Chapter 1 P3: Final Sync & Recommendations → sync + recommend
-Chapter 2 P1: Automated Booking          → book + sync
-Chapter 2 P2: Withdrawal Check           → withdraw + sync
+Chapter 1 (Per-Match Pipeline):
+    1. Extraction (Match page)            → H2H + Standings
+    2. Enrichment (League page)           → Metadata + Match URLs + Teams
+    3. Search Dict (LLM)                  → Search terms + Abbreviations
+    4. Prediction (Adaptive)              → Probability + Save
+Chapter 2: Booking & Withdrawal           → book + withdraw + sync
 Chapter 3: Monitoring & Oversight        → monitor + backtest + sync
 ```
 
@@ -63,10 +64,11 @@ Every Python file MUST have this header format:
 
 ### 2.6 Concurrency Rules
 
-- Use `asyncio.gather()` for independent, parallel operations (e.g., Enrichment + Search Dict + Extraction).
-- **Concurrency Control**: Limit browser concurrency in long-running tasks via `asyncio.Semaphore(MAX_CONCURRENCY)`.
+- **Per-Match Pipeline**: Match processing is the primary unit of concurrency. Use `BatchProcessor` to spawn autonomous worker nodes.
+- **Max Concurrency**: The number of parallel match workers is strictly limited by `MAX_CONCURRENCY` in `.env`.
+- **Sequential Integrity**: Inside each worker, steps (Extraction → Enrichment → Search Dict → Prediction) must remain SEQUENTIAL to ensure data completeness.
+- **Shared Locking**: Every disk write to `Data/Store/` MUST be wrapped in `async with CSV_LOCK:`.
 - Never use `time.sleep()` in async code — use `await asyncio.sleep()`.
-- **Parallel Pipeline**: The main cycle uses: `Prologue P1 (sequential) → [Enrichment || Search Dict || Ch1→Ch2] (parallel) → Ch3`.
 - **Adaptive Feedback:** The `LearningEngine` must update weights AFTER `outcome_reviewer` completes a batch.
 
 ---

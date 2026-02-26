@@ -106,7 +106,45 @@ async def process_match_task(match_data: dict, browser: Browser):
 
         # --- Meta Data Extraction (Leagues & Teams) — Shared Utility ---
         from .enrich_match_metadata import extract_match_page_metadata
-        await extract_match_page_metadata(page, match_data)
+        meta_result = await extract_match_page_metadata(page, match_data)
+
+        # --- Per-Match League Enrichment (v3.6) ---
+        # Visit the league page to extract full metadata, match URLs, team data
+        league_url = meta_result.get('league_url') or match_data.get('league_url', '')
+        league_id = match_data.get('league_id', '')
+        league_name = meta_result.get('league_name', '')
+        region_name = meta_result.get('region_name', '')
+
+        if league_url and league_id:
+            try:
+                from Scripts.enrich_leagues import enrich_league_inline
+                await enrich_league_inline(page, league_url, league_id, league_name, region_name)
+            except Exception as e:
+                print(f"      [Enrich] League enrichment error (non-fatal): {e}")
+
+        # --- Per-Match Search Dict (v3.6) ---
+        # Build search terms for this league + both teams via LLM
+        try:
+            from Scripts.build_search_dict import enrich_match_search_dict
+            await enrich_match_search_dict(
+                league_name=match_data.get('region_league', league_name),
+                league_id=league_id,
+                home_team=match_data.get('home_team', ''),
+                home_id=match_data.get('home_team_id', ''),
+                away_team=match_data.get('away_team', ''),
+                away_id=match_data.get('away_team_id', '')
+            )
+        except Exception as e:
+            print(f"      [SearchDict] Search dict error (non-fatal): {e}")
+
+        # --- Navigate back to match page for prediction ---
+        match_link = match_data.get('match_link', '')
+        if match_link:
+            try:
+                await page.goto(match_link, wait_until='domcontentloaded', timeout=30000)
+                await asyncio.sleep(1.5)
+            except Exception:
+                pass
 
         # --- Process Data & Predict ---
         analysis_input = {"h2h_data": h2h_data, "standings": standings_data}
@@ -134,7 +172,6 @@ async def process_match_task(match_data: dict, browser: Browser):
         p_type = prediction.get("type", "SKIP")
 
         # Rule Engine Logic Gate: Prioritize Over markets if Avg Goals > 1.8
-        # We also verify if a prediction was skipped despite high xG
         if total_xg > 1.8 and p_type == "SKIP":
             print(f"      [xG Signal] High Avg Goals ({total_xg}) detected. Categorizing as OVER 1.5 fallback.")
             prediction.update({
@@ -146,7 +183,6 @@ async def process_match_task(match_data: dict, browser: Browser):
             p_type = "OVER 1.5"
 
         if p_type != "SKIP":
-            # Verification: If Avg Goals is too low, downgrade confidence
             if total_xg < 1.4 and prediction.get("confidence") == "High":
                 prediction["confidence"] = "Medium"
                 prediction["reason"].append(f"Confidence adjusted for low Avg Goals ({total_xg})")

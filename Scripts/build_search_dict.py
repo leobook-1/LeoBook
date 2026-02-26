@@ -498,5 +498,136 @@ async def main():
 
     print("\nSearch dictionary built and local CSVs/Supabase synced!")
 
+# ================================================
+# Per-Match Search Dict Enrichment (v3.6)
+# ================================================
+
+async def enrich_match_search_dict(
+    league_name: str, league_id: str,
+    home_team: str, home_id: str,
+    away_team: str, away_id: str
+):
+    """
+    Per-match enrichment: checks if the league + 2 teams need search_terms/abbreviations.
+    If any are missing, calls the LLM for just those items (max 3 per call).
+    Updates both CSV and Supabase immediately.
+    """
+    items_to_enrich_team = []
+    items_to_enrich_league = []
+    team_id_map = {}  # name -> id
+
+    # --- Check what needs enrichment ---
+    async with CSV_LOCK:
+        # Check teams
+        if os.path.exists(TEAMS_CSV):
+            teams_data = _read_csv(TEAMS_CSV)
+            for tid, tname in [(home_id, home_team), (away_id, away_team)]:
+                if not tid or not tname:
+                    continue
+                found = False
+                for row in teams_data:
+                    if row.get('team_id') == tid:
+                        st = (row.get('search_terms') or '').strip()
+                        abbr = (row.get('abbreviations') or '').strip()
+                        if st and st != '[]' and abbr and abbr != '[]':
+                            found = True  # Already enriched
+                        break
+                if not found:
+                    items_to_enrich_team.append(tname)
+                    team_id_map[tname] = tid
+
+        # Check league
+        if os.path.exists(REGION_LEAGUE_CSV) and league_id:
+            leagues_data = _read_csv(REGION_LEAGUE_CSV)
+            league_enriched = False
+            for row in leagues_data:
+                if row.get('league_id') == league_id:
+                    st = (row.get('search_terms') or '').strip()
+                    abbr = (row.get('abbreviations') or '').strip()
+                    if st and st != '[]' and abbr and abbr != '[]':
+                        league_enriched = True
+                    break
+            if not league_enriched and league_name:
+                items_to_enrich_league.append(league_name)
+
+    if not items_to_enrich_team and not items_to_enrich_league:
+        return  # Nothing to do
+
+    total = len(items_to_enrich_team) + len(items_to_enrich_league)
+    print(f"    [SearchDict] Enriching {total} items for this match ({len(items_to_enrich_team)} teams, {len(items_to_enrich_league)} leagues)...")
+
+    # --- Enrich teams ---
+    if items_to_enrich_team:
+        try:
+            results = await async_query_llm_for_metadata(items_to_enrich_team, item_type="team")
+            updates = {}
+            for idx, item in enumerate(results):
+                if idx >= len(items_to_enrich_team):
+                    break
+                tname = items_to_enrich_team[idx]
+                tid = team_id_map.get(tname)
+                if not tid:
+                    continue
+                off_name = item.get("official_name") or tname
+                search_terms = {normalize_for_search(off_name), normalize_for_search(tname)}
+                for n in item.get("other_names", []):
+                    search_terms.add(normalize_for_search(n))
+                for a in item.get("abbreviations", []):
+                    search_terms.add(normalize_for_search(a))
+
+                upsert_data = clean_none_values({
+                    "team_id": tid,
+                    "team_name": off_name,
+                    "other_names": item.get("other_names", []),
+                    "abbreviations": item.get("abbreviations", []),
+                    "search_terms": list(filter(None, search_terms)),
+                    "country": item.get("country"),
+                    "city": item.get("city"),
+                    "stadium": item.get("stadium"),
+                })
+                updates[tid] = upsert_data
+
+            if updates:
+                batch_upsert("teams", list(updates.values()))
+                async with CSV_LOCK:
+                    update_csv_file_under_lock(TEAMS_CSV, updates, "team_id",
+                        ["team_name", "other_names", "abbreviations", "search_terms", "country", "city", "stadium"])
+                print(f"    [SearchDict] ✓ {len(updates)} teams enriched")
+        except Exception as e:
+            print(f"    [SearchDict] Team enrichment error (non-fatal): {e}")
+
+    # --- Enrich league ---
+    if items_to_enrich_league:
+        try:
+            results = await async_query_llm_for_metadata(items_to_enrich_league, item_type="league")
+            updates = {}
+            for item in results:
+                input_name = item.get("input_name")
+                official_name = item.get("official_name") or input_name
+                search_terms = {normalize_for_search(input_name), normalize_for_search(official_name)}
+                for n in item.get("other_names", []):
+                    search_terms.add(normalize_for_search(n))
+                for a in item.get("abbreviations", []):
+                    search_terms.add(normalize_for_search(a))
+
+                upsert_data = clean_none_values({
+                    "league_id": league_id,
+                    "league": official_name,
+                    "other_names": item.get("other_names", []),
+                    "abbreviations": item.get("abbreviations", []),
+                    "search_terms": list(filter(None, search_terms)),
+                })
+                updates[league_id] = upsert_data
+
+            if updates:
+                batch_upsert("region_league", list(updates.values()))
+                async with CSV_LOCK:
+                    update_csv_file_under_lock(REGION_LEAGUE_CSV, updates, "league_id",
+                        ["league", "other_names", "abbreviations", "search_terms"])
+                print(f"    [SearchDict] ✓ League '{league_name}' enriched")
+        except Exception as e:
+            print(f"    [SearchDict] League enrichment error (non-fatal): {e}")
+
+
 if __name__ == "__main__":
     asyncio.run(main())

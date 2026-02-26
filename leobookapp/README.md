@@ -1,4 +1,4 @@
-# LeoBook App (v3.1) — High Density Liquid Glass Dashboard
+# LeoBook App (v3.6) — High Density Liquid Glass Dashboard
 
 **Chief Engineer**: Emenike Chinenye James
 **Goal**: Ship extreme UI density with premium translucency and zero hardcoded overflows.

@@ -1,6 +1,6 @@
-# LeoBook v3.5 Algorithm & Codebase Reference
+# LeoBook v3.6 Algorithm & Codebase Reference
 
-> **Version**: 3.5 · **Last Updated**: 2026-02-26 · **Architecture**: High-Velocity Concurrent Architecture (Shared Locking + Parallel Pipeline)
+> **Version**: 3.6 · **Last Updated**: 2026-02-26 · **Architecture**: High-Velocity Concurrent Architecture (Shared Locking + Per-Match Sequential Pipeline)
 
 This document maps the **execution flow** of [Leo.py](Leo.py) to specific files and functions.
 
@@ -9,13 +9,12 @@ This document maps the **execution flow** of [Leo.py](Leo.py) to specific files 
 ## System Architecture
 
 Leo.py is a **pure orchestrator**. It runs an infinite `while True` loop, splitting the cycle into three phases:
-Leo.py (Orchestrator) v3.5
+Leo.py (Orchestrator) v3.6
 ├── Phase 1 (Sequential Prerequisite):
 │   └── Cloud Sync → Outcome Review → Accuracy report
-├── Phase 2 (Parallel Execution Group):
-│   ├── Task A: Parallel League Enrichment (Multi-Page Playwright)
-│   ├── Task B: Async Search Dictionary Building
-│   └── Task C: Main Chapter Pipeline (Extraction → Prediction → Booking)
+├── Phase 2 (Parallel Match Pipeline):
+│   └── [Match Worker Node] × MAX_CONCURRENCY
+│       └── H2H/Standings → League Enrichment → Search Dict → Prediction
 ├── Phase 3 (Sequential Oversight):
 │   └── Chief Engineer Oversight → Withdrawal Management
 └── Live Streamer: Background Parallel Task (Always-On)
@@ -39,17 +38,18 @@ Runs in parallel with the main cycle via `asyncio.create_task()`.
 
 ---
 
-## High-Velocity Concurrency (v3.5)
+## High-Velocity Concurrency (v3.6)
 
-**Objective**: Maximize execution throughput while maintaining absolute data integrity.
+**Objective**: Maximize execution throughput via autonomous per-match worker nodes while maintaining absolute data integrity.
 
-1. **Parallel Orchestration**: `Leo.py` uses `asyncio.gather()` to run long-running enrichment and dictionary building in parallel with the main prediction pipeline.
-2. **Concurrent Scrapers**: `enrich_leagues.py` implements multi-page processing, spawning up to `MAX_CONCURRENCY` browser pages simultaneously to process multiple leagues.
-3. **Shared Locking (CSV_LOCK)**: All persistent data access is protected by a global `asyncio.Lock` in [db_helpers.py](Data/Access/db_helpers.py). This prevents race conditions when multiple scripts attempt to write to `teams.csv` or `region_league.csv` at the same time.
-4. **Async Strategy**:
-   - `build_search_dict.py`: Converted to fully async with `asyncio.to_thread` for LLM calls.
-   - `enrich_leagues.py`: Refactored into worker tasks managing their own async contexts.
-
+1. **Parallel Orchestration**: `Leo.py` uses `BatchProcessor` to spawn multiple `process_match_task` workers in parallel.
+2. **Integrated Worker Node**: Each worker executes a strict sequential pipeline:
+   - **H2H + Standings**: Core match data extraction.
+   - **League Enrichment**: Inline navigation to league pages to harvest metadata and fixtures.
+   - **Search Dict**: JIT metadata enrichment via LLMs (Grok/Gemini) for the specific teams and league.
+   - **Prediction**: Final rule engine analysis once all data is present.
+3. **Shared Locking (CSV_LOCK)**: All persistent data access is protected by a global `asyncio.Lock` in [db_helpers.py](Data/Access/db_helpers.py).
+4. **Resiliency**: If one match worker fails, other nodes continue processing. Data is saved incrementally per-match.
 ---
 
 ## Prediction Pipeline (Chapter 1)
