@@ -115,17 +115,21 @@ async def process_match_task(match_data: dict, browser: Browser):
         league_name = meta_result.get('league_name', '')
         region_name = meta_result.get('region_name', '')
 
+        league_inline_result = {}
         if league_url and league_id:
             try:
                 from Scripts.enrich_leagues import enrich_league_inline
-                await enrich_league_inline(page, league_url, league_id, league_name, region_name)
+                league_inline_result = await enrich_league_inline(page, league_url, league_id, league_name, region_name) or {}
             except Exception as e:
                 print(f"      [Enrich] League enrichment error (non-fatal): {e}")
 
-        # --- Per-Match Search Dict (v3.6) ---
-        # Build search terms for this league + both teams via LLM
+        # --- Per-Match Search Dict (v3.7) ---
+        # Collect ALL discovered teams from league page + standings + match
+        # and batch-enrich them via LLM (batches of 10)
         try:
-            from Scripts.build_search_dict import enrich_match_search_dict
+            from Scripts.build_search_dict import enrich_match_search_dict, enrich_batch_teams_search_dict
+
+            # 1. Enrich the league + 2 match teams (lightweight, max 3 items)
             await enrich_match_search_dict(
                 league_name=match_data.get('region_league', league_name),
                 league_id=league_id,
@@ -134,6 +138,31 @@ async def process_match_task(match_data: dict, browser: Browser):
                 away_team=match_data.get('away_team', ''),
                 away_id=match_data.get('away_team_id', '')
             )
+
+            # 2. Batch-enrich ALL discovered teams from league page + standings
+            all_discovered_teams = []
+
+            # Teams from league page extraction
+            for t in league_inline_result.get('team_data', []):
+                if t.get('team_id') and t.get('name'):
+                    all_discovered_teams.append({'team_id': t['team_id'], 'team_name': t['name']})
+
+            # Teams from standings extraction
+            for s in standings_data:
+                if s.get('team_id') and s.get('team_name'):
+                    all_discovered_teams.append({'team_id': s['team_id'], 'team_name': s['team_name']})
+
+            # Deduplicate by team_id
+            seen_ids = set()
+            unique_teams = []
+            for t in all_discovered_teams:
+                if t['team_id'] not in seen_ids:
+                    seen_ids.add(t['team_id'])
+                    unique_teams.append(t)
+
+            if unique_teams:
+                await enrich_batch_teams_search_dict(unique_teams)
+
         except Exception as e:
             print(f"      [SearchDict] Search dict error (non-fatal): {e}")
 

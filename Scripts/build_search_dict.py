@@ -638,5 +638,96 @@ async def enrich_match_search_dict(
             print(f"    [SearchDict] League enrichment error (non-fatal): {e}")
 
 
+async def enrich_batch_teams_search_dict(team_pairs: list, batch_size: int = 10):
+    """
+    Batch-enriches ALL discovered teams with search terms/abbreviations via LLM.
+    
+    Args:
+        team_pairs: List of dicts with 'team_id' and 'team_name' (or 'name').
+        batch_size: Number of teams per LLM call (default 10).
+    """
+    if not team_pairs:
+        return
+
+    # 1. Filter out already-enriched teams
+    unenriched = []
+    async with CSV_LOCK:
+        if os.path.exists(TEAMS_CSV):
+            teams_data = _read_csv(TEAMS_CSV)
+            enriched_ids = set()
+            for row in teams_data:
+                st = (row.get('search_terms') or '').strip()
+                abbr = (row.get('abbreviations') or '').strip()
+                if st and st != '[]' and abbr and abbr != '[]':
+                    enriched_ids.add(row.get('team_id', ''))
+
+            for tp in team_pairs:
+                tid = tp.get('team_id') or tp.get('id', '')
+                tname = tp.get('team_name') or tp.get('name', '')
+                if tid and tname and tid not in enriched_ids:
+                    unenriched.append({'team_id': tid, 'team_name': tname})
+
+    if not unenriched:
+        return
+
+    print(f"    [SearchDict Batch] Enriching {len(unenriched)} unenriched teams in batches of {batch_size}...")
+
+    # 2. Process in batches
+    total_enriched = 0
+    for i in range(0, len(unenriched), batch_size):
+        batch = unenriched[i:i + batch_size]
+        batch_names = [t['team_name'] for t in batch]
+        batch_id_map = {t['team_name']: t['team_id'] for t in batch}
+
+        try:
+            results = await async_query_llm_for_metadata(batch_names, item_type="team")
+            updates = {}
+            for idx, item in enumerate(results):
+                if idx >= len(batch_names):
+                    break
+                tname = batch_names[idx]
+                tid = batch_id_map.get(tname)
+                if not tid:
+                    continue
+
+                off_name = item.get("official_name") or tname
+                search_terms = {normalize_for_search(off_name), normalize_for_search(tname)}
+                for n in item.get("other_names", []):
+                    search_terms.add(normalize_for_search(n))
+                for a in item.get("abbreviations", []):
+                    search_terms.add(normalize_for_search(a))
+
+                upsert_data = clean_none_values({
+                    "team_id": tid,
+                    "team_name": off_name,
+                    "other_names": item.get("other_names", []),
+                    "abbreviations": item.get("abbreviations", []),
+                    "search_terms": list(filter(None, search_terms)),
+                    "country": item.get("country"),
+                    "city": item.get("city"),
+                    "stadium": item.get("stadium"),
+                })
+                updates[tid] = upsert_data
+
+            if updates:
+                batch_upsert("teams", list(updates.values()))
+                async with CSV_LOCK:
+                    update_csv_file_under_lock(TEAMS_CSV, updates, "team_id",
+                        ["team_name", "other_names", "abbreviations", "search_terms", "country", "city", "stadium"])
+                total_enriched += len(updates)
+                print(f"    [SearchDict Batch] ✓ Batch {i // batch_size + 1}: {len(updates)} teams enriched")
+
+        except Exception as e:
+            print(f"    [SearchDict Batch] Batch {i // batch_size + 1} error (non-fatal): {e}")
+
+        # Small delay between batches to avoid rate limiting
+        if i + batch_size < len(unenriched):
+            await asyncio.sleep(2)
+
+    if total_enriched:
+        print(f"    [SearchDict Batch] ✓ Total: {total_enriched}/{len(unenriched)} teams enriched")
+
+
 if __name__ == "__main__":
     asyncio.run(main())
+
