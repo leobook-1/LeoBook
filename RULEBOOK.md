@@ -1,4 +1,4 @@
-# LeoBook Developer RuleBook v1.0
+# LeoBook Developer RuleBook v3.5
 
 > **This document is LAW.** Every developer and AI agent working on LeoBook MUST follow these rules without exception. Violations will break the system.
 
@@ -63,9 +63,10 @@ Every Python file MUST have this header format:
 
 ### 2.6 Concurrency Rules
 
-- Use `asyncio.gather()` for independent operations
-- Never use `time.sleep()` in async code — use `await asyncio.sleep()`
-- The main cycle uses: `Prologue P1 (sequential) → [P2 || Ch1→Ch2] (concurrent) → Ch3`
+- Use `asyncio.gather()` for independent, parallel operations (e.g., Enrichment + Search Dict + Extraction).
+- **Concurrency Control**: Limit browser concurrency in long-running tasks via `asyncio.Semaphore(MAX_CONCURRENCY)`.
+- Never use `time.sleep()` in async code — use `await asyncio.sleep()`.
+- **Parallel Pipeline**: The main cycle uses: `Prologue P1 (sequential) → [Enrichment || Search Dict || Ch1→Ch2] (parallel) → Ch3`.
 - **Adaptive Feedback:** The `LearningEngine` must update weights AFTER `outcome_reviewer` completes a batch.
 
 ---
@@ -163,8 +164,30 @@ Local CSVs in `Data/Store/` are the primary data source. Supabase is the cloud s
 All table definitions live in `sync_manager.py` `TABLE_CONFIG`. To add a new table:
 1. Add entry to `TABLE_CONFIG`
 2. Add CSV headers to `db_helpers.py` `files_and_headers`
+   - **TEAMS**: `['team_id', 'team_name', 'league_ids', 'team_crest', 'team_url', 'last_updated', 'country', 'city', 'stadium', 'other_names', 'abbreviations', 'search_terms']`
+   - **REGION_LEAGUE**: `['league_id', 'region', 'region_flag', 'region_url', 'league', 'league_crest', 'league_url', 'date_updated', 'last_updated', 'other_names', 'abbreviations', 'search_terms']`
 3. Create Supabase table with matching schema
 4. Run `python Leo.py --sync` to verify
+
+### 4.3 Unextracted Data MUST Be "Unknown"
+
+Any CSV cell or database column whose value was **not extracted** during scraping MUST contain the string `Unknown` — **never** an empty string, `null`, `None`, or blank. This applies to all extractors (schedule, H2H, standings, enrichment) and all persistence layers.
+
+- Scores (`home_score`, `away_score`) are exempt — they are legitimately empty before a match starts.
+- `match_status` defaults to `scheduled` when no status is detected.
+- Timestamps (`last_updated`, `date_updated`) use the current ISO timestamp.
+
+### 4.4 Incremental Persistence
+
+Every long-running enrichment or scraping task MUST implement **incremental disk writes**. Data should be persisted to local CSVs/Supabase after EACH item is processed. Do not wait for the entire batch to complete.
+
+### 4.6 Concurrency & Shared Locking (v3.5)
+
+To prevent data corruption during parallel execution, all shared CSV access MUST follow the **Shared Locking** protocol:
+- **`CSV_LOCK`**: Use the global `asyncio.Lock` from `db_helpers.py`.
+- **Block-Level Locking**: Wrap every read-modify-write block in `async with CSV_LOCK:`.
+- **Atomic Operations**: For simple reads or writes, use the `async_read_csv` and `async_write_csv` helpers to ensure atomic access.
+- **Deadlock Avoidance**: Never acquire multiple locks; stick to the single global `CSV_LOCK` for all `Data/Store/` persistence.
 
 ---
 
@@ -391,6 +414,6 @@ LeoBook/
 
 ---
 
-*Last updated: February 24, 2026*
+*Last updated: February 26, 2026*
 *Authored by: LeoBook Engineering Team*
 

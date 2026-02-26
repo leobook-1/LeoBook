@@ -1,5 +1,5 @@
-# enrich_all_schedules.py: enrich_all_schedules.py: Module for Scripts — Pipeline.
-# Part of LeoBook Scripts — Pipeline
+﻿# enrich_all_schedules.py: enrich_all_schedules.py: Module for Scripts â€” Pipeline.
+# Part of LeoBook Scripts â€” Pipeline
 #
 # Functions: load_selectors(), _raw_safe_attr(), _raw_safe_text(), _smart_attr(), _smart_text(), _id_from_href(), _standardize_url(), strip_league_stage() (+6 more)
 
@@ -229,8 +229,8 @@ async def extract_match_enrichment(page, match_url: str, sel: Dict[str, str],
             league_url_href = await _smart_attr(page, "fs_match_page", "league_url", "href")
             if league_url_href:
                 enriched['league_url'] = _standardize_url(league_url_href)
-                enriched['rl_id'] = _id_from_href(league_url_href)
-                enriched['league_id'] = enriched['rl_id']
+                enriched['league_id'] = _id_from_href(league_url_href)
+                enriched['league_id'] = enriched['league_id']
 
         # --- FINAL SCORE ---
         if 'scores' in needs:
@@ -280,12 +280,12 @@ async def extract_match_enrichment(page, match_url: str, sel: Dict[str, str],
                     
                     if league_id:
                         enriched['league_id'] = league_id
-                        enriched['rl_id'] = league_id
+                        enriched['league_id'] = league_id
                         print(f"      [league_id] extracted after visit: {league_id}")
                     else:
                         # fallback to href ID (slug)
                         enriched['league_id'] = _id_from_href(league_url)
-                        enriched['rl_id'] = enriched['league_id']
+                        enriched['league_id'] = enriched['league_id']
                         print(f"      [league_id] fallback to href: {enriched['league_id']}")
                     
                     # Visit results page to extract metadata (crest, flag, season)
@@ -305,7 +305,7 @@ async def extract_match_enrichment(page, match_url: str, sel: Dict[str, str],
                     print(f"      [WARNING] League page visit failed for {league_url}: {visit_e}")
                     # fallback to original href parsing
                     enriched['league_id'] = _id_from_href(league_url)
-                    enriched['rl_id'] = enriched['league_id']
+                    enriched['league_id'] = enriched['league_id']
             else:
                 print(f"      [ALERT] No league URL found for {match_url}. Flagging for manual review.")
                 enriched['match_status'] = 'manual_review_needed'
@@ -344,7 +344,7 @@ async def process_match_task_isolated(browser: Browser, match: Dict, sel: Dict[s
             if enriched:
                 match.update(enriched)
             else:
-                # I1: Pre-capture validation — only save diagnostics if page actually loaded
+                # I1: Pre-capture validation â€” only save diagnostics if page actually loaded
                 page_html = ""
                 try:
                     page_html = await page.content()
@@ -354,10 +354,10 @@ async def process_match_task_isolated(browser: Browser, match: Dict, sel: Dict[s
                 is_blank_page = len(page_html.strip()) < 60 or page_html.strip() == "<html><head></head><body></body></html>"
                 
                 if is_blank_page:
-                    # Page never loaded — browser crash or navigation failure
+                    # Page never loaded â€” browser crash or navigation failure
                     print(f"      [BROWSER_CRASH] Page blank for {fixture_id}. Skipping diagnostic save (no useful data).")
                 else:
-                    # Real page content exists — save diagnostics for AIGO analysis
+                    # Real page content exists â€” save diagnostics for AIGO analysis
                     log_dir = Path("Data/Logs/EnrichmentFailures") / fixture_id
                     log_dir.mkdir(parents=True, exist_ok=True)
                     
@@ -582,7 +582,7 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                         pass
                 to_harvest.append(lg)
 
-            print(f"[INFO] {len(active_leagues)} leagues total | ⏭ {skipped} recently harvested (< 24h) | 🔄 {len(to_harvest)} to scan")
+            print(f"[INFO] {len(active_leagues)} leagues total | â­ {skipped} recently harvested (< 24h) | ðŸ”„ {len(to_harvest)} to scan")
             
             if not to_harvest:
                 print("[INFO] All leagues recently harvested. Phase 0 skipped.")
@@ -662,15 +662,15 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                                     _total_added += added
 
                                 suffix = f" (+{added} new)" if added else ""
-                                print(f"   [{idx}/{total}] ✓ {l_name}: {len(found_urls)} URLs{suffix}")
+                                print(f"   [{idx}/{total}] âœ“ {l_name}: {len(found_urls)} URLs{suffix}")
                             except asyncio.TimeoutError:
-                                print(f"   [{idx}/{total}] ⚠ {l_name}: TIMEOUT ({PER_LEAGUE_TIMEOUT}s)")
+                                print(f"   [{idx}/{total}] âš  {l_name}: TIMEOUT ({PER_LEAGUE_TIMEOUT}s)")
                             except Exception as e:
-                                print(f"   [{idx}/{total}] ✗ {l_name}: {e}")
+                                print(f"   [{idx}/{total}] âœ— {l_name}: {e}")
                             finally:
                                 await page.close()
                         except Exception as e:
-                            print(f"   [{idx}/{total}] ✗ {l_name}: Browser error: {e}")
+                            print(f"   [{idx}/{total}] âœ— {l_name}: Browser error: {e}")
 
                 async with async_playwright() as p:
                     browser = await p.chromium.launch(headless=True)
@@ -705,7 +705,7 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
         invalid_mask = (df_schedules['fixture_id'] == '') & (df_schedules['match_link'] == '')
         removal_count = invalid_mask.sum()
         
-        # SAFETY GUARD: If cleanup would remove >50% of rows, something is wrong — abort
+        # SAFETY GUARD: If cleanup would remove >50% of rows, something is wrong â€” abort
         if removal_count > 0 and removal_count < (initial_count * 0.5):
             df_schedules = df_schedules[~invalid_mask]
             print(f"[CLEANUP] Removed {removal_count} rows with missing both fixture_id and match_link.")
@@ -790,7 +790,7 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
     to_enrich = final_to_enrich
     print(f"  [PRIORITY] Sorted {len(to_enrich)} tasks. (Capped Priority 3 to {HISTORICAL_GAP_LIMIT})")
 
-    # I2: Calculate auto-scaling concurrency — capped lower in Codespace
+    # I2: Calculate auto-scaling concurrency â€” capped lower in Codespace
     max_concurrency = 2 if _IS_CODESPACE else 5
     calc_concurrency = max(1, min(max_concurrency, len(to_enrich) // 20))
     env_label = "Codespace" if _IS_CODESPACE else "Local"
@@ -836,19 +836,19 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                         save_schedule_entry(match)
                         sync_buffer_schedules.append(match)
 
-                        # Build rl_id for team -> league mapping
-                        rl_id = match.get('rl_id', '')
+                        # Build league_id for team -> league mapping
+                        league_id = match.get('league_id', '')
                         region = match.get('region', '')
                         league = match.get('league', '')
-                        if not rl_id and region and league:
-                            rl_id = f"{region}_{league}".replace(' ', '_').replace('-', '_').upper()
+                        if not league_id and region and league:
+                            league_id = f"{region}_{league}".replace(' ', '_').replace('-', '_').upper()
 
                         # Upsert home team with ALL columns
                         if match.get('home_team_id'):
                             home_team_data = {
                                 'team_id': match['home_team_id'],
                                 'team_name': match.get('home_team_name', match.get('home_team', 'Unknown')),
-                                'rl_ids': rl_id,
+                                'league_ids': league_id,
                                 'team_crest': match.get('home_team_crest', ''),
                                 'team_url': match.get('home_team_url', '')
                             }
@@ -861,7 +861,7 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                             away_team_data = {
                                 'team_id': match['away_team_id'],
                                 'team_name': match.get('away_team_name', match.get('away_team', 'Unknown')),
-                                'rl_ids': rl_id,
+                                'league_ids': league_id,
                                 'team_crest': match.get('away_team_crest', ''),
                                 'team_url': match.get('away_team_url', '')
                             }
@@ -870,9 +870,9 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                             sync_buffer_teams.append(away_team_data)
 
                         # Upsert region_league with ALL columns
-                        if rl_id:
+                        if league_id:
                             league_data = {
-                                'rl_id': rl_id,
+                                'league_id': league_id,
                                 'region': region,
                                 'region_flag': match.get('region_flag', ''),
                                 'region_url': match.get('region_url', ''),
@@ -881,7 +881,7 @@ async def enrich_all_schedules(limit: Optional[int] = None, dry_run: bool = Fals
                                 'league_crest': match.get('league_crest', '')
                             }
                             save_region_league_entry(league_data)
-                            leagues_added.add(rl_id)
+                            leagues_added.add(league_id)
                             sync_buffer_leagues.append(league_data)
 
                         # --- Save standings if extracted ---
@@ -999,3 +999,4 @@ if __name__ == "__main__":
         backfill_predictions=args.backfill_predictions,
         league_page=args.league_page
     ))
+

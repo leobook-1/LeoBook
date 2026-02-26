@@ -1,4 +1,4 @@
-> **Version**: 3.3 · **Last Updated**: 2026-02-24 · **Architecture**: Concurrent Clean Architecture (Sequential + Parallel Pipeline)
+> **Version**: 3.5 · **Last Updated**: 2026-02-26 · **Architecture**: High-Velocity Concurrent Architecture (Shared Locking + Parallel Pipeline)
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ LeoBook is a **fully autonomous sports prediction and betting system** comprised
 | **Backend (Leo.py)** | Python 3.12 + Playwright | Autonomous data extraction, rule-based prediction, odds harvesting, bet placement, withdrawal management, and system health monitoring |
 | **Frontend (leobookapp)** | Flutter/Dart | Elite dashboard with "Telegram-grade" density, liquid glass aesthetics, and proportional scaling |
 
-**Leo.py** is a **pure orchestrator** — it contains zero business logic. All logic lives in the modules it imports. It runs in an infinite loop, executing a cycle every 6h. Starting v3.2, the engine uses **Concurrent Task Execution** to run non-blocking prologue tasks alongside the main chapter pipeline, and operates on a drastically simplified, first-principles codebase.
+**Leo.py** is a **pure orchestrator** — it contains zero business logic. All logic lives in the modules it imports. It runs in an infinite loop, executing a cycle every 6h. Starting v3.5, the engine uses **High-Velocity Concurrent Execution** via `asyncio.gather` and multi-page Playwright processing, protected by a global `CSV_LOCK` for storage integrity.
 
 ---
 
@@ -79,14 +79,12 @@ Leo.py splits the cycle into three phases: Sequential Prep, Concurrent Execution
 | 1 | **Prologue P1** | `SyncManager` | Bi-directional Supabase handshake (Sync on Startup). |
 | 2 | **Prologue P1** | `outcome_reviewer` | Match score matching for results + Accuracy Report. |
 
-#### Phase 2: Concurrent Pipeline (Parallel Execution)
+#### Phase 2: Parallel Pipeline (High-Velocity Execution)
 | Execution Stream | Phase | Module Called | Action | Resume Logic |
 |:--- | :--- | :--- | :--- | :--- |
-| Stream A | **Prologue P2** | `Data Access Layer` | Accuracy generation & Final Prologue sync. | Delta-based sync. |
-| Stream B | **Chapter 1** | `manager.py` | Scrape today's fixtures and run **Adaptive Rule-based predictions**. | Skip if `fixture_id` already predicted. |
-| Stream B | **Chapter 1** | `fb_manager.py` | Match to Football.com and extract booking codes. | Skip if already `harvested` or `booked`. |
-| Stream B | **Chapter 1** | `recommend_bets` | Score predictions and save `recommended.json`. | Stateless recalculation. |
-| Stream B | **Chapter 2** | `placement.py` | Inject codes and place bets with Kelly staking. | Skip if already `booked` or `placed`. |
+| Stream A | **Enrichment** | `enrich_leagues.py` | Multi-page Parallel League Enrichment (Playwright). | Hash-based resume logic. |
+| Stream B | **Search Dict** | `build_search_dict.py` | Async team/league metadata enrichment & dictionary building. | Skip if already enriched. |
+| Stream C | **Chapter 1** | `manager.py` | Main Chapter Pipeline: Extraction → Adaptive Prediction → Booking. | Skip if `fixture_id` already predicted. |
 
 #### Phase 3: Sequential Oversight (Finality)
 | # | Phase | Module Called | Action |
@@ -116,7 +114,7 @@ flowchart LR
     subgraph SOURCES ["External Sources"]
         FS[("Flashscore.com<br/>Match Data")]
         FB[("Football.com<br/>Betting Platform")]
-        GROK[("Grok/Gemini API<br/>AIGO & Dictionary")]
+        LLM[("Grok & Gemini API<br/>Dual-LLM Strategy")]
     end
 
     subgraph LEO ["Leo.py Orchestrator"]
@@ -131,6 +129,7 @@ flowchart LR
 
     subgraph DATA ["Data Layer"]
         CSV[("Local CSVs<br/>predictions.csv<br/>schedules.csv")]
+        LOCK["🔒 CSV_LOCK<br/>(Shared Locking)"]
         LW[("learning_weights.json<br/>Adaptive Rule Weights")]
         KJ[("knowledge.json<br/>Selector Knowledge Base")]
         SB[("Supabase<br/>Cloud Database")]
@@ -141,13 +140,14 @@ flowchart LR
     end
 
     FS --> EXTRACT --> CSV
+    CSV <--> LOCK
     CSV --> PREDICT --> CSV
     CSV --> HARVEST
     FB --> HARVEST --> CSV
     CSV --> BOOK --> FB
     HARVEST -.->|"selector failure logs"| AIGO
     BOOK -.->|"UI failure logs"| AIGO
-    AIGO --> GROK
+    AIGO --> LLM
     AIGO -->|"persist selector & log_selector_failure"| KJ
     CSV <--> SB
     LW <--> SB

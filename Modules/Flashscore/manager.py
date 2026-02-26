@@ -19,7 +19,6 @@ from Data.Access.db_helpers import (
 )
 from Core.Browser.site_helpers import fs_universal_popup_dismissal, click_next_day
 from Core.Utils.utils import BatchProcessor
-from Core.Utils.monitor import PageMonitor
 from Core.Intelligence.selector_manager import SelectorManager
 from Core.Utils.constants import NAVIGATION_TIMEOUT, WAIT_FOR_LOAD_STATE_TIMEOUT
 from Core.Intelligence.aigo_suite import AIGOSuite
@@ -51,10 +50,9 @@ async def run_flashscore_analysis(playwright: Playwright):
             timezone_id="Africa/Lagos"
         )
         page = await context.new_page()
-        PageMonitor.attach_listeners(page)
         
-        # Concurrency settings from environment (as baseline)
-        env_concurrency = int(os.getenv('FLASHSCORE_CONCURRENCY', 5))
+        # Concurrency strictly from .env MAX_CONCURRENCY
+        from Core.Utils.constants import MAX_CONCURRENCY
 
         total_cycle_predictions = 0
 
@@ -145,10 +143,11 @@ async def run_flashscore_analysis(playwright: Playwright):
                         return False
 
                 for m in matches_data:
-                    fixture_id = m.get('id')
+                    fixture_id = m.get('fixture_id') or m.get('id')
+                    m['fixture_id'] = fixture_id # Standardize in dict
                     m['date'] = target_full
                     save_schedule_entry({
-                        'fixture_id': fixture_id, 'date': m.get('date'), 'match_time': m.get('time'),
+                        'fixture_id': fixture_id, 'date': m.get('date'), 'match_time': m.get('match_time') or m.get('time'),
                         'region_league': m.get('region_league'), 'home_team': m.get('home_team'),
                         'away_team': m.get('away_team'), 'home_team_id': m.get('home_team_id'),
                         'away_team_id': m.get('away_team_id'), 'match_status': 'scheduled',
@@ -174,32 +173,35 @@ async def run_flashscore_analysis(playwright: Playwright):
                     else:
                         valid_matches.append(m)
 
-                # --- Batch Processing With Dynamic Concurrency ---
+                # --- Batch Processing (Concurrency from .env MAX_CONCURRENCY) ---
                 if valid_matches:
-                    # Dynamic scaling
-                    if len(valid_matches) > 100:
-                        max_concurrent = min(env_concurrency + 3, 10) # Aggressive
-                    elif len(valid_matches) < 20:
-                        max_concurrent = max(env_concurrency - 2, 2) # Conservative
-                    else:
-                        max_concurrent = env_concurrency             # Standard
-                    
-                    print(f"    [Batching] Processing {len(valid_matches)} matches concurrently (Scaling: {max_concurrent})...")
-                    processor = BatchProcessor(max_concurrent=max_concurrent)
-                    
-                    # Process in smaller chunks to trigger frequent syncs
-                    analysis_chunk_size = 10
-                    for i in range(0, len(valid_matches), analysis_chunk_size):
-                        chunk = valid_matches[i:i + analysis_chunk_size]
-                        chunk_results = await processor.run_batch(chunk, process_match_task, browser=browser)
-                        
-                        successful_in_chunk = sum(1 for r in chunk_results if r)
-                        total_cycle_predictions += successful_in_chunk
-                        
-                        if successful_in_chunk > 0:
-                            print(f"\n   [Analytics Sync] {total_cycle_predictions} predictions generated. Triggering micro-batch sync...")
-                            from Data.Access.sync_manager import run_full_sync
-                            await run_full_sync()
+                    print(f"    [Batching] Processing {len(valid_matches)} matches (Concurrency: {MAX_CONCURRENCY})...")
+
+                    async def _run_batch_processing():
+                        """Batch H2H + standings extraction per match."""
+                        nonlocal total_cycle_predictions
+                        processor = BatchProcessor(max_concurrent=MAX_CONCURRENCY)
+                        analysis_chunk_size = 10
+                        for i in range(0, len(valid_matches), analysis_chunk_size):
+                            chunk = valid_matches[i:i + analysis_chunk_size]
+                            chunk_results = await processor.run_batch(chunk, process_match_task, browser=browser)
+                            successful_in_chunk = sum(1 for r in chunk_results if r)
+                            total_cycle_predictions += successful_in_chunk
+                            if successful_in_chunk > 0:
+                                print(f"\n   [Analytics Sync] {total_cycle_predictions} predictions generated. Triggering micro-batch sync...")
+                                from Data.Access.sync_manager import run_full_sync
+                                await run_full_sync()
+
+                    async def _run_league_enrichment():
+                        """Parallel: visit league pages to fill Unknown metadata."""
+                        try:
+                            from Scripts.enrich_leagues import enrich_leagues
+                            await enrich_leagues()
+                        except Exception as e:
+                            print(f"    [Enrich] League enrichment error (non-fatal): {e}")
+
+                    # Run both in parallel — batch uses existing browser, enrichment launches its own
+                    await asyncio.gather(_run_batch_processing(), _run_league_enrichment())
                 else:
                     print("    [Info] No new matches to process.")
 
@@ -243,7 +245,6 @@ async def run_flashscore_schedule_only(playwright: Playwright, refresh: bool = F
             timezone_id="Africa/Lagos"
         )
         page = await context.new_page()
-        PageMonitor.attach_listeners(page)
 
         # Navigation
         print("  [Navigation] Going to Flashscore...")

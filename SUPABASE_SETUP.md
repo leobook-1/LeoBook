@@ -1,6 +1,6 @@
 # Supabase Setup Guide
 
-> **Version**: 3.2 · **Last Updated**: 2026-02-24
+> **Version**: 3.5 · **Last Updated**: 2026-02-26
 
 ## Quick Setup (5 minutes)
 
@@ -69,7 +69,7 @@ SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1...
 
 ## How Sync Works (v2.8)
 
-LeoBook v2.8 uses **automatic bi-directional sync** — no manual scripts needed.
+LeoBook v3.5 uses **High-Velocity Parallel Syncing** — no manual scripts needed.
 
 ### Sync Architecture
 ```
@@ -93,16 +93,18 @@ Leo.py runs SyncManager automatically:
 | `schedules` | `schedules.csv` | `fixture_id` | Bi-directional |
 | `standings` | `standings.csv` | `league_id + team_id` | CSV → Supabase |
 | `teams` | `teams.csv` | `team_id` | CSV → Supabase |
-| `region_league` | `region_league.csv` | `league_id` | CSV → Supabase |
+| `region_league` | `region_league.csv` | `league_id` | CSV → Supabase (Enriched via Dual-LLM) |
 | `accuracy_reports` | `accuracy_reports.csv` | `report_id` | CSV → Supabase |
 | `live_scores` | `live_scores.csv` | `fixture_id` | CSV → Supabase (every 60s) |
 | `learning_weights` | `learning_weights.json` | `region_league` | CSV → Supabase (upon weight update) |
 
-### Sync Frequency per Leo.py Cycle (v3.1)
+### Sync Frequency per Leo.py Cycle (v3.5)
 1. **Phase 1 (Sequential)**: `sync_on_startup()` — bi-directional merge
-2. **Phase 2 (Concurrent Stream A)**: `run_full_sync("Prologue Final")` — push enrichment data
-3. **Phase 2 (Concurrent Stream B)**: `run_full_sync("Chapter 1 Final")` — push new predictions
-4. **Ad-hoc**: Any module can call `run_full_sync()` as needed
+2. **Phase 2 (Parallel Tasks)**:
+   - **Stream A (Enrichment)**: `run_full_sync("Prologue Final")` — push league/team metadata
+   - **Stream B (Search Dict)**: Real-time metadata syncing (Grok/Gemini enriched)
+   - **Stream C (Chapter 1)**: `run_full_sync("Chapter 1 Final")` — push new predictions
+3. **Ad-hoc**: Parallel modules call `run_full_sync()` protected by `CSV_LOCK`.
 
 ---
 

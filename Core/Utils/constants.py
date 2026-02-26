@@ -1,12 +1,16 @@
-# constants.py: constants.py: Centralized timeout and configuration constants.
-# Part of LeoBook Core — Utilities
-#
+import os
+from dotenv import load_dotenv
 
-"""
-LeoBook Constants
-Centralized timeout and configuration constants.
-"""
+# Load .env file
+load_dotenv()
 
 # Timeout Constants (in milliseconds)
-NAVIGATION_TIMEOUT = 180000  # 3 minutes for page navigation (balanced between speed and reliability)
+NAVIGATION_TIMEOUT = 180000  # 3 minutes for page navigation
 WAIT_FOR_LOAD_STATE_TIMEOUT = 90000  # 1.5 minutes for load state operations
+
+# Financial Settings
+DEFAULT_STAKE = float(os.getenv("DEFAULT_STAKE", 1.0))
+CURRENCY_SYMBOL = os.getenv("CURRENCY_SYMBOL", "$")
+
+# Concurrency Control
+MAX_CONCURRENCY = int(os.getenv("MAX_CONCURRENCY", 1))

@@ -1,8 +1,4 @@
-# build_search_dict.py: build_search_dict.py: Module for Scripts — Pipeline.
-# Part of LeoBook Scripts — Pipeline
-#
-# Functions: normalize_for_search(), generate_deterministic_id(), extract_json_with_salvage(), query_grok_for_metadata_with_retry(), query_grok_for_metadata(), batch_upsert(), update_csv_file(), find_best_match_league() (+1 more)
-
+﻿import asyncio
 import csv
 import os
 import json
@@ -15,6 +11,7 @@ from collections import defaultdict
 from Core.Intelligence.aigo_suite import AIGOSuite
 from supabase import create_client
 from dotenv import load_dotenv
+from Data.Access.db_helpers import CSV_LOCK, _read_csv, _write_csv
 
 # Load environment variables
 load_dotenv()
@@ -28,18 +25,23 @@ REGION_LEAGUE_CSV = os.path.join("Data", "Store", "region_league.csv")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
-# ───────────────────────────────────────────────
-# xAI Grok API Configuration
-# ───────────────────────────────────────────────
-GROK_API_KEY = os.getenv("GROK_API_KEY")
-GROK_API_URL = "https://api.x.ai/v1/chat/completions"
-MODEL = "grok-4-1-fast-reasoning" 
-HEADERS = {
-    "Authorization": f"Bearer {GROK_API_KEY}",
-    "Content-Type": "application/json"
-}
-BATCH_SIZE = 10 # Process in small batches
-SLEEP_BETWEEN_BATCHES = 2 # Seconds
+# LLM Provider Configuration (Grok primary, Gemini secondary)
+LLM_PROVIDERS = [
+    {
+        'name': 'Grok',
+        'api_key': os.getenv('GROK_API_KEY'),
+        'api_url': 'https://api.x.ai/v1/chat/completions',
+        'model': 'grok-4-1-fast-reasoning',
+    },
+    {
+        'name': 'Gemini',
+        'api_key': os.getenv('GEMINI_API_KEY'),
+        'api_url': 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+        'model': 'gemini-2.5-flash',
+    },
+]
+BATCH_SIZE = 10
+SLEEP_BETWEEN_BATCHES = 2
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("Missing SUPABASE_URL or SUPABASE_KEY in .env")
@@ -113,30 +115,11 @@ def extract_json_with_salvage(text: str) -> list:
             
     return objects
 
-def query_grok_for_metadata_with_retry(items, item_type="team", retries=3):
-    """
-    Wrapper for query_grok_for_metadata with retry logic.
-    """
-    for attempt in range(retries):
-        try:
-            return query_grok_for_metadata(items, item_type)
-        except Exception as e:
-            print(f"  [Warning] Grok API attempt {attempt+1}/{retries} failed: {e}")
-            time.sleep(5 * (attempt + 1)) # Exponential backoff
-    print(f"  [Error] Grok API failed after {retries} attempts.")
-    return []
-
-def query_grok_for_metadata(items, item_type="team"):
-    """
-    Sends a batch of team/league names to Grok and asks for structured metadata.
-    Returns list of dicts with enriched info.
-    """
-    if not items:
-        return []
-    
+def _build_prompt(items, item_type="team"):
+    """Builds the LLM prompt for team or league metadata enrichment."""
     items_list = "\n".join([f"- {name}" for name in items])
     if item_type == "team":
-        prompt = f"""You are a football/soccer database expert.
+        return f"""You are a football/soccer database expert.
 Here is a list of team names extracted from match schedules:
 {items_list}
 For EACH team, return accurate, canonical metadata in this exact JSON structure.
@@ -155,14 +138,13 @@ Output ONLY valid JSON array of objects with these keys:
     "stadium": "home stadium name or null",
     "league": "primary current league (short name)",
     "founded": year or null,
-    "crest_url": "official or reliable crest image URL or null",
     "wikipedia_url": "best Wikipedia page or null"
   }}
 ]
 Return ONLY the JSON array — no explanations, no markdown.
 """
-    else: # league
-        prompt = f"""You are a football/soccer database expert.
+    else:  # league
+        return f"""You are a football/soccer database expert.
 Here is a list of league/competition identifiers:
 {items_list}
 For EACH one, return accurate, canonical metadata in this exact JSON structure.
@@ -175,50 +157,77 @@ Output ONLY valid JSON array of objects with these keys:
     "official_name": "current official name",
     "other_names": ["previous names", "short names", "sponsor variants"],
     "abbreviations": ["common short codes"],
-    "country": "country or 'International' / 'Continental'",
     "level": "top-tier / second / etc or null",
     "season_format": "Apertura/Clausura, single table, etc or null",
-    "logo_url": "official or reliable logo URL or null",
     "wikipedia_url": "best Wikipedia page or null"
   }}
 ]
 Return ONLY the JSON array — no explanations, no markdown.
 """
+
+
+def _call_llm(provider: dict, prompt: str) -> list:
+    """Calls a single LLM provider and returns parsed results."""
+    headers = {
+        "Authorization": f"Bearer {provider['api_key']}",
+        "Content-Type": "application/json"
+    }
     payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
+        "model": provider["model"],
+        "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.1,
         "max_tokens": 4096
     }
-    try:
-        resp = requests.post(GROK_API_URL, headers=HEADERS, json=payload, timeout=60)
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"Grok API error: {e}")
-        try:
-            print(f"Response: {resp.text}")
-        except:
-            pass
-        return []
-        
+    resp = requests.post(provider["api_url"], headers=headers, json=payload, timeout=60)
+    resp.raise_for_status()
     content = resp.json()["choices"][0]["message"]["content"].strip()
-    
-    # Salvage data from potential malformed JSON
+
     data = extract_json_with_salvage(content)
     if not data:
-        print("Warning: Grok response yielded no valid JSON:\n", content[:300], "...")
+        print(f"  [Warning] {provider['name']} response yielded no valid JSON: {content[:200]}...")
         return []
 
-    # Basic key validation
-    validated_data = []
-    for item in data:
-        if isinstance(item, dict) and "input_name" in item:
-            validated_data.append(item)
-        else:
-            print(f"  [Warning] Skipping irrelevant Grok item: {item}")
-    return validated_data
+    validated = [item for item in data if isinstance(item, dict) and "input_name" in item]
+    return validated
+
+
+def query_llm_for_metadata(items, item_type="team", retries=2):
+    """
+    Queries LLM providers in priority order (Grok primary, Gemini secondary).
+    Each provider gets `retries` attempts before falling through to the next.
+    """
+    if not items:
+        return []
+
+    prompt = _build_prompt(items, item_type)
+
+    for provider in LLM_PROVIDERS:
+        if not provider.get("api_key"):
+            print(f"  [Skip] {provider['name']} — no API key configured.")
+            continue
+
+        for attempt in range(1, retries + 1):
+            try:
+                print(f"  [LLM] {provider['name']} attempt {attempt}/{retries}...")
+                results = _call_llm(provider, prompt)
+                if results:
+                    print(f"  [LLM] {provider['name']} returned {len(results)} items.")
+                    return results
+            except Exception as e:
+                print(f"  [Warning] {provider['name']} attempt {attempt}/{retries} failed: {e}")
+                time.sleep(3 * attempt)
+
+        print(f"  [Fallback] {provider['name']} exhausted. Trying next provider...")
+
+    print(f"  [Error] All LLM providers failed for {len(items)} {item_type}(s).")
+    return []
+
+async def async_query_llm_for_metadata(items, item_type="team", retries=2):
+    """Async wrapper for query_llm_for_metadata using to_thread."""
+    return await asyncio.to_thread(query_llm_for_metadata, items, item_type, retries)
+
+# Backward-compatible alias
+query_grok_for_metadata_with_retry = async_query_llm_for_metadata
 
 def batch_upsert(table_name: str, data: list, chunk_size: int = 1000):
     """Upserts data to Supabase in chunks to avoid payload limits."""
@@ -237,8 +246,8 @@ def batch_upsert(table_name: str, data: list, chunk_size: int = 1000):
                     except Exception as e2:
                         print(f"  [Error] Individual upsert failed: {e2}")
 
-def update_csv_file(file_path, data_map, key_field, headers):
-
+def update_csv_file_under_lock(file_path, data_map, key_field, headers):
+    """Wait, this should be synchronous logic since we'll wrap the call in a lock."""
     temp_file = file_path + ".tmp"
     updated_count = 0
     new_count = 0
@@ -248,7 +257,7 @@ def update_csv_file(file_path, data_map, key_field, headers):
          open(temp_file, mode='w', encoding='utf-8', newline='') as outfile:
         
         reader = csv.DictReader(infile)
-        fieldnames = reader.fieldnames
+        fieldnames = list(reader.fieldnames)
         
         # Ensure new columns exist in header
         for h in headers:
@@ -298,16 +307,16 @@ def update_csv_file(file_path, data_map, key_field, headers):
 def find_best_match_league(input_name: str, country: str, existing_leagues: dict):
     """
     Match an input league name against existing league rows.
-    Returns (rl_id, is_new).
+    Returns (league_id, is_new).
     """
     norm_input = normalize_for_search(input_name)
-    # Strip round/stage suffixes for matching: "TURKEY - 1. LIG - ROUND 22" → "turkey 1 lig"
+    # Strip round/stage suffixes for matching: "TURKEY - 1. LIG - ROUND 22" â†’ "turkey 1 lig"
     norm_input_base = re.sub(r'\s*-?\s*(round|matchday|playoffs?|apertura|clausura|1/\d+-finals?|group\s*\w)\s*.*$', '', norm_input, flags=re.IGNORECASE).strip()
 
     best_id = None
     best_score = 0
 
-    for rl_id, row in existing_leagues.items():
+    for league_id, row in existing_leagues.items():
         existing_name = normalize_for_search(row.get("league", ""))
         existing_country = (row.get("country") or "").strip().lower()
 
@@ -317,7 +326,7 @@ def find_best_match_league(input_name: str, country: str, existing_leagues: dict
 
         # Exact match
         if norm_input_base == existing_name:
-            return rl_id, False
+            return league_id, False
 
         # Substring containment score
         if norm_input_base and existing_name:
@@ -325,18 +334,17 @@ def find_best_match_league(input_name: str, country: str, existing_leagues: dict
                 score = len(existing_name)
                 if score > best_score:
                     best_score = score
-                    best_id = rl_id
+                    best_id = league_id
 
     if best_id:
         return best_id, False
 
-    # No match — generate deterministic ID
-    new_id = generate_deterministic_id(input_name, country or "")
-    return new_id, True
+    # No match â€” generate deterministic ID
+    return generate_deterministic_id(input_name, country or ""), True
 
 
 @AIGOSuite.aigo_retry(max_retries=2, delay=2.0, use_aigo=False)
-def main():
+async def main():
     if not os.path.exists(CSV_FILE):
         print(f"Error: {CSV_FILE} not found.")
         return
@@ -345,225 +353,150 @@ def main():
     teams_raw = defaultdict(lambda: {"id": None, "names": set()})
 
     print(f"Reading {CSV_FILE} and collecting unique teams/leagues...")
-    with open(CSV_FILE, mode='r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            rl = (row.get("region_league") or "Unknown").strip()
-            leagues_raw.add(rl)
-            for prefix in ["home_", "away_"]:
-                tname = (row.get(prefix + "team") or "").strip()
-                tid = (row.get(prefix + "team_id") or "").strip()
-                if not tname or not tid:
-                    continue
-                teams_raw[tid]["id"] = tid
-                teams_raw[tid]["names"].add(tname)
+    async with CSV_LOCK:
+        with open(CSV_FILE, mode='r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rl = (row.get("region_league") or "Unknown").strip()
+                leagues_raw.add(rl)
+                for prefix in ["home_", "away_"]:
+                    tname = (row.get(prefix + "team") or "").strip()
+                    tid = (row.get(prefix + "team_id") or "").strip()
+                    if not tname or not tid:
+                        continue
+                    teams_raw[tid]["id"] = tid
+                    teams_raw[tid]["names"].add(tname)
 
     print(f"Found {len(leagues_raw)} unique league keys")
     print(f"Found {len(teams_raw)} unique teams (by ID)")
 
-    # ───────────────────────────────────────────────
-    # TWO-PASS ENRICHMENT STRATEGY
-    #   Pass 1: Items with NO search_terms  (empty → enrich)
-    #   Pass 2: Items WITH search_terms but MISSING critical fields (incomplete → re-enrich)
-    # ───────────────────────────────────────────────
-    fully_enriched_team_ids = set()   # have search_terms AND all critical fields
-    incomplete_team_ids = set()       # have search_terms but missing critical fields
-    TEAM_CRITICAL_FIELDS = ['country', 'city']  # stadium/crest are nice-to-have, not worth re-enriching
-    if os.path.exists(TEAMS_CSV):
-        with open(TEAMS_CSV, mode='r', encoding='utf-8') as f:
-            for row in csv.DictReader(f):
-                st = row.get('search_terms', '').strip()
-                tid = row.get('team_id', '').strip()
-                if not tid:
-                    continue
-                if st and st != '[]':
-                    # Has search_terms — check if critical fields are filled
-                    missing = [fld for fld in TEAM_CRITICAL_FIELDS
-                               if is_field_empty(row.get(fld, ''))]
-                    if missing:
-                        incomplete_team_ids.add(tid)
-                    else:
-                        fully_enriched_team_ids.add(tid)
+    fully_enriched_team_ids = set()
+    incomplete_team_ids = set()
+    TEAM_CRITICAL_FIELDS = ['abbreviations', 'city']
+    
+    async with CSV_LOCK:
+        if os.path.exists(TEAMS_CSV):
+            with open(TEAMS_CSV, mode='r', encoding='utf-8') as f:
+                for row in csv.DictReader(f):
+                    st = row.get('search_terms', '').strip()
+                    tid = row.get('team_id', '').strip()
+                    if not tid: continue
+                    if st and st != '[]':
+                        missing = [fld for fld in TEAM_CRITICAL_FIELDS if is_field_empty(row.get(fld, ''))]
+                        if missing: incomplete_team_ids.add(tid)
+                        else: fully_enriched_team_ids.add(tid)
 
-    fully_enriched_league_keys = set()  # rl_ids with search_terms AND all critical fields
-    incomplete_league_keys = set()      # rl_ids with search_terms but missing critical fields
-    LEAGUE_CRITICAL_FIELDS = ['country']  # logo_url is nice-to-have; Grok can't supply most logos
+        existing_leagues = {}
+        fully_enriched_league_keys = set()
+        incomplete_league_keys = set()
+        LEAGUE_CRITICAL_FIELDS = ['abbreviations']
+        if os.path.exists(REGION_LEAGUE_CSV):
+            with open(REGION_LEAGUE_CSV, mode='r', encoding='utf-8') as f:
+                for row in csv.DictReader(f):
+                    league_id = row.get("league_id", "").strip()
+                    if not league_id: continue
+                    existing_leagues[league_id] = row
+                    st = row.get('search_terms', '').strip()
+                    if st and st != '[]':
+                        missing = [fld for fld in LEAGUE_CRITICAL_FIELDS if is_field_empty(row.get(fld, ''))]
+                        if missing: incomplete_league_keys.add(league_id)
+                        else: fully_enriched_league_keys.add(league_id)
 
-    # Load existing region_league data FIRST (needed for ID matching)
-    existing_leagues = {}
-    if os.path.exists(REGION_LEAGUE_CSV):
-        with open(REGION_LEAGUE_CSV, mode='r', encoding='utf-8') as f:
-            for row in csv.DictReader(f):
-                rl_id = row.get("rl_id", "").strip()
-                if not rl_id:
-                    continue
-                existing_leagues[rl_id] = row
-                st = row.get('search_terms', '').strip()
-                if st and st != '[]':
-                    missing = [fld for fld in LEAGUE_CRITICAL_FIELDS
-                               if is_field_empty(row.get(fld, ''))]
-                    if missing:
-                        incomplete_league_keys.add(rl_id)
-                    else:
-                        fully_enriched_league_keys.add(rl_id)
-
-    # Map raw league names → rl_ids so we can correctly compare
     raw_to_rlid = {}
     for raw_name in leagues_raw:
-        rl_id, _ = find_best_match_league(raw_name, None, existing_leagues)
-        raw_to_rlid[raw_name] = rl_id
+        league_id, _ = find_best_match_league(raw_name, None, existing_leagues)
+        raw_to_rlid[raw_name] = league_id
 
-    # Count using rl_ids
     empty_leagues = [l for l in leagues_raw if raw_to_rlid[l] not in fully_enriched_league_keys and raw_to_rlid[l] not in incomplete_league_keys]
     incomplete_leagues_list = [l for l in leagues_raw if raw_to_rlid[l] in incomplete_league_keys]
 
-    print(f"\n[PASS 1] Teams:   {len(teams_raw) - len(fully_enriched_team_ids) - len(incomplete_team_ids)} empty → enrich")
-    print(f"[PASS 2] Teams:   {len(incomplete_team_ids)} incomplete → re-enrich")
-    print(f"[SKIP]   Teams:   {len(fully_enriched_team_ids)} fully enriched")
-    print(f"[PASS 1] Leagues: {len(empty_leagues)} empty → enrich")
-    print(f"[PASS 2] Leagues: {len(incomplete_leagues_list)} incomplete → re-enrich")
-    print(f"[SKIP]   Leagues: {len(fully_enriched_league_keys)} fully enriched")
+    print(f"\nâ”€â”€ PASS 1: Teams â”€â”€")
+    print(f"  {len(teams_raw) - len(fully_enriched_team_ids) - len(incomplete_team_ids)} teams to process.")
+    print(f"\nâ”€â”€ PASS 2: Teams â”€â”€")
+    print(f"  {len(incomplete_team_ids)} teams to re-process (incomplete data).")
+    print(f"\nâ”€â”€ PASS 1: Leagues â”€â”€")
+    print(f"  {len(empty_leagues)} leagues to process.")
+    print(f"\nâ”€â”€ PASS 2: Leagues â”€â”€")
+    print(f"  {len(incomplete_leagues_list)} leagues to re-process (incomplete data).")
 
-    # Prepared Update Maps for CSVs
-    league_updates = {}
-    team_updates = {}
+    # --- Process Leagues ---
+    for league_list, pass_name in [(empty_leagues, "PASS 1"), (incomplete_leagues_list, "PASS 2")]:
+        if not league_list: continue
+        print(f"\nâ”€â”€ {pass_name}: Leagues â”€â”€")
+        for i in range(0, len(league_list), BATCH_SIZE):
+            batch = league_list[i:i + BATCH_SIZE]
+            print(f"  Processing batch of {len(batch)} leagues...")
+            results = await async_query_llm_for_metadata(batch, item_type="league")
+            updates = {}
+            for item in results:
+                input_name = item.get("input_name")
+                official_name = item.get("official_name") or input_name
+                country = item.get("country") # LLM might return country for a league
+                lid, _ = find_best_match_league(input_name, country, existing_leagues)
+                
+                search_terms = {normalize_for_search(input_name), normalize_for_search(official_name)}
+                for n in item.get("other_names", []): search_terms.add(normalize_for_search(n))
+                for a in item.get("abbreviations", []): search_terms.add(normalize_for_search(a))
+                
+                upsert_data = clean_none_values({
+                    "league": official_name,
+                    "other_names": item.get("other_names", []),
+                    "abbreviations": item.get("abbreviations", []),
+                    "search_terms": list(filter(None, search_terms)),
+                    "league_id": lid
+                })
+                updates[lid] = upsert_data
 
-    # ───────────────────────────────────────────────
-    # PASS 1: Enrich leagues with NO search_terms (empty first!)
-    # PASS 2: Re-enrich leagues with search_terms but missing fields
-    # ───────────────────────────────────────────────
-    league_list_pass1 = empty_leagues
-    league_list_pass2 = incomplete_leagues_list
-    print(f"\n── PASS 1: Enriching {len(league_list_pass1)} empty leagues ──")
-    for league_list, pass_name in [(league_list_pass1, "PASS 1"), (league_list_pass2, "PASS 2")]:
-      if not league_list:
-        print(f"  [{pass_name}] No leagues to process, skipping.")
-        continue
-      print(f"  [{pass_name}] Processing {len(league_list)} leagues...")
-      for i in range(0, len(league_list), BATCH_SIZE):
-        batch = league_list[i:i + BATCH_SIZE]
-        print(f" Processing league batch {i//BATCH_SIZE + 1} ({len(batch)} items)")
-        results = query_grok_for_metadata_with_retry(batch, item_type="league")
-        print(results)
-        for item in results:
-            input_name = item.get("input_name")
-            official_name = item.get("official_name") or input_name
-            country = item.get("country")
-            
-            # Determine correct ID for CSV sync (using country context)
-            rl_id_key, is_new = find_best_match_league(input_name, country, existing_leagues)
+            if updates:
+                print(f"  [Supabase] Upserting {len(updates)} leagues...")
+                batch_upsert("region_league", list(updates.values()))
+                async with CSV_LOCK:
+                    update_csv_file_under_lock(REGION_LEAGUE_CSV, updates, "league_id", ["league", "other_names", "abbreviations", "search_terms"])
+            await asyncio.sleep(SLEEP_BETWEEN_BATCHES)
 
-            # Build search terms
-            search_terms = {normalize_for_search(input_name), normalize_for_search(official_name)}
-            for n in item.get("other_names", []):
-                search_terms.add(normalize_for_search(n))
-            for a in item.get("abbreviations", []):
-                search_terms.add(normalize_for_search(a))
-            
-            # Add misspellings/aliases
-            for term in list(search_terms):
-                search_terms.add(term.replace("league", "lge"))
-                search_terms.add(term.replace("cup", "cp"))
-
-            upsert_data = clean_none_values({
-                "league": official_name, # map to league
-                "other_names": item.get("other_names", []),
-                "abbreviations": item.get("abbreviations", []),
-                "search_terms": list(filter(None, search_terms)),
-                "country": item.get("country"),
-                "logo_url": item.get("logo_url")
-            })
-            
-            # Prepare CSV update data using the matched ID
-            league_updates[rl_id_key] = upsert_data
-
-            # Prepare for batch upsert
-            league_updates[rl_id_key] = {**upsert_data, "rl_id": rl_id_key}
-
-        # Batched Upsert to Supabase
-        if league_updates:
-            print(f"  [Supabase] Batch upserting {len(league_updates)} leagues...")
-            batch_upsert("region_league", list(league_updates.values()))
-
-        time.sleep(SLEEP_BETWEEN_BATCHES) # Wait between batches
-
-        # INCREMENTAL UPDATE: Update Region League CSV after each batch
-        if league_updates:
-            print(f" Syncing {len(league_updates)} league updates to local CSV...")
-            update_csv_file(REGION_LEAGUE_CSV, league_updates, "rl_id", ["league", "other_names", "abbreviations", "search_terms", "country", "logo_url"])
-            league_updates.clear() # Clear specific batch updates after writing
-
-    # ───────────────────────────────────────────────
-    # PASS 1 + PASS 2: Enrich Teams
-    # ───────────────────────────────────────────────
+    # --- Process Teams ---
     team_ids_all = list(teams_raw.keys())
     team_ids_pass1 = [tid for tid in team_ids_all if tid not in fully_enriched_team_ids and tid not in incomplete_team_ids]
     team_ids_pass2 = [tid for tid in team_ids_all if tid in incomplete_team_ids]
-    print(f"\n── PASS 1: Enriching {len(team_ids_pass1)} empty teams ──")
-    print(f"── PASS 2: Re-enriching {len(team_ids_pass2)} incomplete teams ──")
+    
     for team_ids, pass_name in [(team_ids_pass1, "PASS 1"), (team_ids_pass2, "PASS 2")]:
-      if not team_ids:
-        print(f"  [{pass_name}] No teams to process, skipping.")
-        continue
-      print(f"  [{pass_name}] Processing {len(team_ids)} teams...")
-      for i in range(0, len(team_ids), BATCH_SIZE):
-          batch_ids = team_ids[i:i + BATCH_SIZE]
-          batch_names = [list(teams_raw[tid]["names"])[0] for tid in batch_ids]
-          print(f" Processing team batch {i//BATCH_SIZE + 1} ({len(batch_ids)} teams)")
-          results = query_grok_for_metadata_with_retry(batch_names, item_type="team")
-        
-          for idx, item in enumerate(results):
-              if idx >= len(batch_ids): break
-              tid = batch_ids[idx]
-              input_names = teams_raw[tid]["names"]
-              official_name = item.get("official_name") or list(input_names)[0]
-
-              # Build search terms
-              search_terms = {normalize_for_search(official_name)}
-              for n in input_names:
-                  search_terms.add(normalize_for_search(n))
-              for n in item.get("other_names", []):
-                  search_terms.add(normalize_for_search(n))
-              for a in item.get("abbreviations", []):
-                  search_terms.add(normalize_for_search(a))
-
-              # Add misspellings/aliases
-              for term in list(search_terms):
-                  search_terms.add(term.replace("united", "utd"))
-                  search_terms.add(term.replace("city", "fc"))
-
-              upsert_data = clean_none_values({
-                  "team_id": tid, # use team_id as per schema
-                  "team_name": official_name, # map to team_name
-                  "other_names": item.get("other_names", []),
-                  "abbreviations": item.get("abbreviations", []),
-                  "search_terms": list(filter(None, search_terms)),
-                  "country": item.get("country"),
-                  "city": item.get("city"),
-                  "stadium": item.get("stadium"),
-                  "team_crest": item.get("crest_url") # column is team_crest in schema
-              })
-            
-              # Prepare CSV update data
-              team_updates[tid] = upsert_data
-
-              # Prepare for batch upsert
-              team_updates[tid] = upsert_data
-
-          # Batched Upsert to Supabase
-          if team_updates:
-              print(f"  [Supabase] Batch upserting {len(team_updates)} teams...")
-              batch_upsert("teams", list(team_updates.values()))
+        if not team_ids: continue
+        print(f"\nâ”€â”€ {pass_name}: Teams â”€â”€")
+        for i in range(0, len(team_ids), BATCH_SIZE):
+            batch_ids = team_ids[i:i + BATCH_SIZE]
+            batch_names = [list(teams_raw[tid]["names"])[0] for tid in batch_ids] # Use first name as input
+            print(f"  Processing batch of {len(batch_ids)} teams...")
+            results = await async_query_llm_for_metadata(batch_names, item_type="team")
+            updates = {}
+            for idx, item in enumerate(results):
+                if idx >= len(batch_ids): break # Safety break
+                tid = batch_ids[idx]
+                off_name = item.get("official_name") or list(teams_raw[tid]["names"])[0]
+                search_terms = {normalize_for_search(off_name)}
+                for n in teams_raw[tid]["names"]: search_terms.add(normalize_for_search(n))
+                for n in item.get("other_names", []): search_terms.add(normalize_for_search(n))
+                for a in item.get("abbreviations", []): search_terms.add(normalize_for_search(a))
                 
-          time.sleep(SLEEP_BETWEEN_BATCHES) # Wait between batches
+                upsert_data = clean_none_values({
+                    "team_id": tid,
+                    "team_name": off_name,
+                    "other_names": item.get("other_names", []),
+                    "abbreviations": item.get("abbreviations", []),
+                    "search_terms": list(filter(None, search_terms)),
+                    "country": item.get("country"),
+                    "city": item.get("city"),
+                    "stadium": item.get("stadium"),
+                })
+                updates[tid] = upsert_data
 
-          # INCREMENTAL UPDATE: Update Teams CSV after each batch
-          if team_updates:
-              print(f" Syncing {len(team_updates)} team updates to local CSV...")
-              update_csv_file(TEAMS_CSV, team_updates, "team_id", ["team_name", "other_names", "abbreviations", "search_terms", "country", "city", "stadium", "team_crest"])
-              team_updates.clear() # Clear specific batch updates after writing
+            if updates:
+                print(f"  [Supabase] Upserting {len(updates)} teams...")
+                batch_upsert("teams", list(updates.values()))
+                async with CSV_LOCK:
+                    update_csv_file_under_lock(TEAMS_CSV, updates, "team_id", ["team_name", "other_names", "abbreviations", "search_terms", "country", "city", "stadium"])
+            await asyncio.sleep(SLEEP_BETWEEN_BATCHES)
 
     print("\nSearch dictionary built and local CSVs/Supabase synced!")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

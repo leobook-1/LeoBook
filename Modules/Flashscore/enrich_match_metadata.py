@@ -1,5 +1,5 @@
-# enrich_match_metadata.py: Shared match-page metadata extraction utility.
-# Part of LeoBook Modules — Flashscore
+﻿# enrich_match_metadata.py: Shared match-page metadata extraction utility.
+# Part of LeoBook Modules â€” Flashscore
 #
 # Functions: extract_match_page_metadata(), strip_league_stage()
 # Called by: fs_processor.py (Ch1 P1), manager.py (--schedule --all)
@@ -93,12 +93,12 @@ async def extract_match_page_metadata(page: Page, match_data: dict) -> dict:
         computed_region_league = f"{region_name.upper()} - {clean_league}"
 
         # --- League ID: Visit league page for real season hash ---
-        rl_id = ""
+        league_id = ""
         league_crest = ""
 
         if league_url:
             try:
-                # Navigate to the league page — JS injects the season hash into the URL
+                # Navigate to the league page â€” JS injects the season hash into the URL
                 await page.goto(league_url, wait_until='networkidle', timeout=30000)
                 await asyncio.sleep(2.5)  # Allow JS to update URL with season hash
 
@@ -107,16 +107,16 @@ async def extract_match_page_metadata(page: Page, match_data: dict) -> dict:
                     try:
                         hash_part = final_url.split('#/')[1].split('/')[0]
                         if hash_part and len(hash_part) > 5:  # typical Flashscore ID length
-                            rl_id = hash_part
-                            print(f"      [league_id] Extracted after visit: {rl_id}")
+                            league_id = hash_part
+                            print(f"      [league_id] Extracted after visit: {league_id}")
                     except (IndexError, AttributeError):
                         pass
 
-                if not rl_id:
+                if not league_id:
                     # Fallback to href-based ID
                     parts = league_url.rstrip('/').split('/')
-                    rl_id = parts[-1] if parts else ""
-                    print(f"      [league_id] Fallback to href: {rl_id}")
+                    league_id = parts[-1] if parts else ""
+                    print(f"      [league_id] Fallback to href: {league_id}")
 
                 # --- Extract league metadata (crest, flag) from league page ---
                 try:
@@ -165,16 +165,16 @@ async def extract_match_page_metadata(page: Page, match_data: dict) -> dict:
                 print(f"      [Warning] League page visit failed: {visit_e}")
                 # Fallback: try extracting from URL fragment on match page
                 if league_url_href and "#/" in league_url_href:
-                    rl_id = league_url_href.split("#/")[-1]
-                if not rl_id:
-                    rl_id = f"{region_name}_{league_name}".replace(' ', '_').replace('-', '_').upper()
+                    league_id = league_url_href.split("#/")[-1]
+                if not league_id:
+                    league_id = f"{region_name}_{league_name}".replace(' ', '_').replace('-', '_').upper()
         else:
-            rl_id = f"{region_name}_{league_name}".replace(' ', '_').replace('-', '_').upper()
+            league_id = f"{region_name}_{league_name}".replace(' ', '_').replace('-', '_').upper()
 
         # --- Enrich match_data in place ---
         match_data['region_league'] = computed_region_league
         match_data['league_stage'] = stage
-        match_data['league_id'] = rl_id
+        match_data['league_id'] = league_id
 
         extracted.update({
             'region_name': region_name,
@@ -182,7 +182,7 @@ async def extract_match_page_metadata(page: Page, match_data: dict) -> dict:
             'region_url': region_url,
             'league_name': league_name,
             'league_url': league_url,
-            'league_id': rl_id,
+            'league_id': league_id,
             'league_crest': league_crest,
             'region_league': computed_region_league,
             'league_stage': stage,
@@ -190,7 +190,7 @@ async def extract_match_page_metadata(page: Page, match_data: dict) -> dict:
 
         # --- Save Region/League ---
         save_region_league_entry({
-            'rl_id': rl_id,
+            'league_id': league_id,
             'region': region_name,
             'region_flag': region_flag,
             'region_url': region_url,
@@ -217,14 +217,14 @@ async def extract_match_page_metadata(page: Page, match_data: dict) -> dict:
         save_team_entry({
             'team_id': match_data.get('home_team_id'),
             'team_name': match_data.get('home_team'),
-            'rl_ids': rl_id,
+            'league_ids': league_id,
             'team_crest': home_crest,
             'team_url': home_url
         })
         save_team_entry({
             'team_id': match_data.get('away_team_id'),
             'team_name': match_data.get('away_team'),
-            'rl_ids': rl_id,
+            'league_ids': league_id,
             'team_crest': away_crest,
             'team_url': away_url
         })
@@ -233,3 +233,4 @@ async def extract_match_page_metadata(page: Page, match_data: dict) -> dict:
         print(f"      [Warning] Failed to extract metadata for {match_label}: {e}")
 
     return extracted
+

@@ -245,16 +245,13 @@ def get_recommendations(target_date=None, show_all_upcoming=False, **kwargs):
     }
 
 def save_recommendations_to_predictions_csv(recommendations):
-    """Updates predictions.csv with is_recommended flag and score."""
+    """Updates predictions.csv with recommendation_score (score > 0 = recommended)."""
     if not os.path.exists(PREDICTIONS_CSV):
         print(f"[Error] predictions.csv not found at {PREDICTIONS_CSV}")
         return
 
     # Create a lookup map for faster access
-    # Key: fixture_id (preferred) or home_away_date fallback
     rec_map = {r['fixture_id']: r for r in recommendations if r.get('fixture_id')}
-    
-    # Also map by team names for fallback
     rec_map_teams = {f"{r['match']}_{r['date']}": r for r in recommendations}
 
     updated_rows = []
@@ -267,35 +264,29 @@ def save_recommendations_to_predictions_csv(recommendations):
             headers = reader.fieldnames
             data = list(reader)
 
-        if 'is_recommended' not in headers:
-            headers.append('is_recommended')
         if 'recommendation_score' not in headers:
             headers.append('recommendation_score')
 
         for row in data:
-            # Reset by default to ensure clean state
-            row['is_recommended'] = 'False'
-            row['recommendation_score'] = '0.0'
+            row['recommendation_score'] = '0'
 
-            # Try to match
             fid = row.get('fixture_id')
             match_key = f"{row.get('home_team')} vs {row.get('away_team')}_{row.get('date')}"
             
             matched_rec = rec_map.get(fid) or rec_map_teams.get(match_key)
 
             if matched_rec:
-                row['is_recommended'] = 'True'
-                row['recommendation_score'] = str(matched_rec['score'])
+                row['recommendation_score'] = str(round(matched_rec['score'], 2))
                 updates_count += 1
             
             updated_rows.append(row)
 
         with open(PREDICTIONS_CSV, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
+            writer = csv.DictWriter(f, fieldnames=headers, extrasaction='ignore')
             writer.writeheader()
             writer.writerows(updated_rows)
             
-        print(f"[ALGO] Updated predictions.csv: {updates_count} marked as recommended out of {len(data)} total rows.")
+        print(f"[ALGO] Updated predictions.csv: {updates_count} scored out of {len(data)} total rows.")
 
     except Exception as e:
         print(f"[Error] Failed to update predictions.csv: {e}")

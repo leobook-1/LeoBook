@@ -18,7 +18,6 @@ from .fb_session import launch_browser_with_retry
 from .fb_url_resolver import resolve_urls
 from .navigator import load_or_create_session, extract_balance
 from Core.Utils.utils import log_error_state
-from Core.Utils.monitor import PageMonitor
 from Core.System.lifecycle import log_state
 from Core.Intelligence.aigo_suite import AIGOSuite
 
@@ -30,10 +29,9 @@ async def _create_session(playwright: Playwright):
 
     context = await launch_browser_with_retry(playwright, user_data_dir)
     _, page = await load_or_create_session(context)
-    PageMonitor.attach_listeners(page)
 
-    current_balance = await extract_balance(page)
-    print(f"  [Balance] Current: ₦{current_balance:.2f}")
+    from Core.Utils.constants import CURRENCY_SYMBOL
+    print(f"  [Balance] Current: {CURRENCY_SYMBOL}{current_balance:.2f}")
 
     return context, page, current_balance
 

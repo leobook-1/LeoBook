@@ -85,8 +85,9 @@ async def capture_debug_snapshot(page: Page, label: str, info_text: str = ""):
         print(f"    [Debug Failure] Could not write debug snapshot: {e}") 
 
 class BatchProcessor:
-    def __init__(self, max_concurrent: int = 4):
-        self.semaphore = asyncio.Semaphore(max_concurrent)
+    def __init__(self, max_concurrent: int = None):
+        from Core.Utils.constants import MAX_CONCURRENCY
+        self.semaphore = asyncio.Semaphore(max_concurrent or MAX_CONCURRENCY)
 
     async def _worker(self, func: Callable, item: T, *args, **kwargs): # type: ignore
         async with self.semaphore:

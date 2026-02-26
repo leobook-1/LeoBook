@@ -11,13 +11,17 @@ import re
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
+from supabase import create_client, Client
 
 from Data.Access.supabase_client import get_supabase_client
 from Data.Access.db_helpers import DB_DIR, files_and_headers
 from Core.Intelligence.aigo_suite import AIGOSuite
+from Data.Supabase.push_schema import push_schema
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +33,7 @@ TABLE_CONFIG = {
     'predictions': {'csv': 'predictions.csv', 'table': 'predictions', 'key': 'fixture_id'},
     'schedules': {'csv': 'schedules.csv', 'table': 'schedules', 'key': 'fixture_id'},
     'teams': {'csv': 'teams.csv', 'table': 'teams', 'key': 'team_id'},
-    'region_league': {'csv': 'region_league.csv', 'table': 'region_league', 'key': 'rl_id'},
+    'region_league': {'csv': 'region_league.csv', 'table': 'region_league', 'key': 'league_id'},
     'standings': {'csv': 'standings.csv', 'table': 'standings', 'key': 'standings_key'},
     'fb_matches': {'csv': 'fb_matches.csv', 'table': 'fb_matches', 'key': 'site_match_id'},
     'profiles': {'csv': 'profiles.csv', 'table': 'profiles', 'key': 'id'},
@@ -57,6 +61,13 @@ class SyncManager:
             return
 
         logger.info("Starting hardened bi-directional sync on startup...")
+        
+        # Phase 0: Auto-Provision Supabase Schema
+        print("   [PROLOGUE] Auto-provisioning Supabase Database Schema...")
+        schema_ok = push_schema()
+        if not schema_ok:
+            print("   [WARNING] Schema auto-provision failed. Ensure 'execute_sql' RPC exists and Service Key is in .env.")
+            
         print("   [PROLOGUE] Bi-Directional Sync — comparing local CSV vs Supabase timestamps...")
 
         for table_key, config in TABLE_CONFIG.items():
@@ -395,8 +406,16 @@ class SyncManager:
 async def run_full_sync(session_name: str = "Periodic"):
     """Wrapper to sync ALL tables with audit logging and AIGO protection."""
     from Data.Access.db_helpers import log_audit_event
-    manager = SyncManager()
+    from Data.Supabase.push_schema import push_schema
+    
     logger.info(f"Starting global full sync [{session_name}]...")
+    
+    print("   [PROLOGUE] Auto-provisioning Supabase Database Schema before sync...")
+    schema_ok = push_schema()
+    if not schema_ok:
+        print("   [WARNING] Schema auto-provision failed. Ensure 'execute_sql' and 'refresh_schema' RPCs exist and Service Key is in .env.")
+            
+    manager = SyncManager()
     
     success_count = 0
     fail_count = 0

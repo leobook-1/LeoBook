@@ -9,7 +9,6 @@ from Data.Access.db_helpers import save_prediction, save_region_league_entry, sa
 from Core.Browser.site_helpers import fs_universal_popup_dismissal
 from Core.Browser.Extractors.h2h_extractor import extract_h2h_data, activate_h2h_tab, save_extracted_h2h_to_schedules
 from Core.Browser.Extractors.standings_extractor import extract_standings_data, activate_standings_tab
-from Core.Utils.monitor import PageMonitor
 from Core.Utils.utils import log_error_state
 import re
 
@@ -40,8 +39,8 @@ async def process_match_task(match_data: dict, browser: Browser):
         timezone_id="Africa/Lagos"
     )
     page = await context.new_page()
-    PageMonitor.attach_listeners(page)
-    match_label = f"{match_data.get('home_team', 'unknown')}_vs_{match_data.get('away_team', 'unknown')}"
+    fixture_id = match_data.get('fixture_id') or match_data.get('id') or 'unknown'
+    match_label = f"{match_data.get('home_team', 'unknown')}_vs_{match_data.get('away_team', 'unknown')}_{fixture_id}"
 
     try:
         print(f"    [Batch Start] {match_data['home_team']} vs {match_data['away_team']}")

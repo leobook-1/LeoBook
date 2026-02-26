@@ -21,7 +21,6 @@ from Core.Intelligence.intelligence import fb_universal_popup_dismissal as neo_p
 from Core.Intelligence.selector_manager import SelectorManager
 from Core.Utils.constants import NAVIGATION_TIMEOUT, WAIT_FOR_LOAD_STATE_TIMEOUT
 from Core.Utils.utils import capture_debug_snapshot
-from Core.Utils.monitor import PageMonitor
 from Core.Intelligence.aigo_suite import AIGOSuite
 
 PHONE = cast(str, os.getenv("FB_PHONE"))
@@ -33,12 +32,9 @@ if not PHONE or not PASSWORD:
     raise ValueError("FB_PHONE and FB_PASSWORD environment variables must be set for login.")
 
 async def log_page_title(page: Page, label: str = ""):
-    """Logs the current page title and records it to the Page Registry."""
+    """Logs the current page title."""
     try:
         title = await page.title()
-        # print(f"  [Monitor] {label}: '{title}'")
-        # Vigilant Capture
-        await PageMonitor.capture(page, label)
         return title
     except Exception as e:
         print(f"  [Simple Log] Could not get title: {e}")

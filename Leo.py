@@ -281,7 +281,7 @@ async def run_utility(args):
     elif args.search_dict:
         print("\n  --- LEO: Rebuild Search Dictionary ---")
         from Scripts.build_search_dict import main as build_search
-        build_search()
+        await build_search()
 
     elif args.review:
         print("\n  --- LEO: Outcome Review ---")
@@ -322,6 +322,17 @@ async def run_utility(args):
         print("\n  --- LEO: Manual Metadata Enrichment ---")
         await enrich_all_schedules(extract_standings=True, league_page=True)
         await run_full_sync(session_name="Manual Enrich")
+
+    elif args.enrich_leagues:
+        print("\n  --- LEO: Parallel Enrichment & Search Dict ---")
+        from Scripts.enrich_leagues import enrich_leagues
+        from Scripts.build_search_dict import main as build_search
+        await asyncio.gather(
+            enrich_leagues(),
+            build_search(),
+            return_exceptions=True
+        )
+        await run_full_sync(session_name="League Enrich")
 
     elif args.rule_engine:
         from Core.Intelligence.rule_engine_manager import RuleEngineManager
@@ -519,7 +530,7 @@ if __name__ == "__main__":
     is_utility = any([args.sync, args.recommend, args.accuracy,
                       args.search_dict, args.review, args.backtest,
                       args.rule_engine, args.streamer, args.schedule,
-                      args.enrich])
+                      args.enrich, args.enrich_leagues])
     is_granular = args.prologue or args.chapter is not None
 
     try:

@@ -226,8 +226,9 @@ async def place_multi_bet_from_codes(page: Page, harvested_matches: List[Dict], 
         p = CONFIDENCE_TO_PROB.get(m.get('confidence', 'Medium'), 0.50)
         total_prob *= p
     
+    from Core.Utils.constants import CURRENCY_SYMBOL
     final_stake = calculate_kelly_stake(current_balance, total_odds, probability=max(total_prob, 0.01))
-    print(f"    [Execute] Final Stake: ₦{final_stake}")
+    print(f"    [Execute] Final Stake: {CURRENCY_SYMBOL}{final_stake}")
 
     # 5. Open Slip Drawer
     slip_trigger = SelectorManager.get_selector_strict("fb_match_page", "slip_trigger_button")
@@ -251,7 +252,8 @@ async def place_multi_bet_from_codes(page: Page, harvested_matches: List[Dict], 
     if new_balance >= (current_balance - (final_stake * 0.5)):
         raise ValueError("Balance did not decrease sufficiently. Placement likely failed.")
 
-    print(f"    [Execute Success] Multi-bet placed! New Balance: ₦{new_balance:.2f}")
+    from Core.Utils.constants import CURRENCY_SYMBOL
+    print(f"    [Execute Success] Multi-bet placed! New Balance: {CURRENCY_SYMBOL}{new_balance:.2f}")
     
     # Update Statuses
     from Data.Access.db_helpers import update_site_match_status, update_prediction_status, log_audit_event

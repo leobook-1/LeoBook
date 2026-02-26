@@ -86,7 +86,7 @@ class DataRepository {
       final response = await _supabase
           .from('predictions')
           .select()
-          .eq('is_recommended', true)
+          .gt('recommendation_score', 0)
           .order('recommendation_score', ascending: false);
 
       debugPrint('Loaded ${response.length} recommendations from Supabase');

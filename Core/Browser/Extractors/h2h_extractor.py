@@ -137,7 +137,7 @@ async def extract_h2h_data(page: Page, home_team_main: str, away_team_main: str,
 
     js_code = r"""(data) => {
         const { selectors, home_team_main, away_team_main } = data;
-        const getText = (el, sel) => el ? el.querySelector(sel)?.innerText.trim() || '' : '';
+        const getText = (el, sel) => el ? el.querySelector(sel)?.innerText.trim() || 'Unknown' : 'Unknown';
         const getAttribute = (el, sel, attr) => el?.querySelector(sel)?.[attr] || null;
 
         const results = {
@@ -222,11 +222,11 @@ async def extract_h2h_data(page: Page, home_team_main: str, away_team_main: str,
 
                     const matchLink = linkEl ? linkEl.getAttribute('href') : null;
 
-                    let homeTeamId = null;
-                    let awayTeamId = null;
-                    let homeTeamUrl = null;
-                    let awayTeamUrl = null;
-                    let cleanId = null;
+                    let homeTeamId = 'Unknown';
+                    let awayTeamId = 'Unknown';
+                    let homeTeamUrl = 'Unknown';
+                    let awayTeamUrl = 'Unknown';
+                    let cleanId = 'Unknown';
 
                     if (matchLink) {
                         // 1. Clean the link to handle both relative and absolute URLs
@@ -275,8 +275,8 @@ async def extract_h2h_data(page: Page, home_team_main: str, away_team_main: str,
                         score: `${scoreHome}-${scoreAway}`,
                         winner: winner,
                         perspective_result: perspectiveResult,
-                        match_link: matchLink,
-                        match_url: matchLink,
+                        match_link: matchLink || 'Unknown',
+                        match_url: matchLink || 'Unknown',
                         home_team_url: homeTeamUrl,
                         away_team_url: awayTeamUrl,
                         fixture_id: cleanId,

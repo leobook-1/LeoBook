@@ -7,9 +7,13 @@ import os
 import sys
 import argparse
 import uuid
+from pathlib import Path
 from datetime import datetime as dt
-from Data.Access.db_helpers import init_csvs
-from Core.Utils.utils import Tee, LOG_DIR
+from Core.Utils.constants import DEFAULT_STAKE
+from Core.Utils.utils import Tee
+
+_current_dir = Path(__file__).parent.absolute()
+LOG_DIR = _current_dir.parent.parent / "Data" / "Logs"
 
 state = {
     "cycle_start_time": None, 
@@ -25,7 +29,7 @@ state = {
     "booked_this_cycle": 0,
     "failed_this_cycle": 0,
     "current_balance": 0.0,
-    "last_win_amount": 5000.0, # Heuristic
+    "last_win_amount": 5000.0 * DEFAULT_STAKE, # Scalable
     "error_log": []
 }
 
@@ -179,6 +183,8 @@ Examples:
                        help='Also extract H2H + standings per match (use with --schedule)')
     parser.add_argument('--enrich', action='store_true',
                        help='Run manual metadata enrichment (gap-fill for historical data)')
+    parser.add_argument('--enrich-leagues', action='store_true',
+                       help='Visit league pages to fill Unknown metadata in region_league, schedules, and teams')
 
     # --- Rule Engine Management ---
     parser.add_argument('--rule-engine', action='store_true',

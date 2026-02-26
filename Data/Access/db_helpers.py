@@ -11,10 +11,15 @@ Responsible for saving predictions, schedules, standings, teams, and region-leag
 
 import os
 import csv
+import json
 import sys
 from datetime import datetime as dt
 from typing import Dict, Any, List, Optional
 import uuid
+import asyncio
+
+# Global lock for synchronizing CSV access across async tasks
+CSV_LOCK = asyncio.Lock()
 
 # Increase CSV field size limit to handle large strings (e.g. HTML/JSON blobs)
 csv.field_size_limit(sys.maxsize)
@@ -76,26 +81,50 @@ def upsert_entry(filepath: str, data_row: Dict, fieldnames: List[str], unique_ke
     _write_csv(filepath, all_rows, fieldnames)
 
 def batch_upsert(filepath: str, data_rows: List[Dict], fieldnames: List[str], unique_key: str):
-    """Batch UPSERT: reads once, updates/inserts all in memory, writes once."""
+    """Batch UPSERT: reads once, updates/inserts all in memory, writes once.
+    Rejects rows with empty/None unique keys to prevent ghost entries."""
     if not data_rows:
         return
     all_rows = _read_csv(filepath)
+    # Clean existing rows: remove any with empty unique key (historical ghost rows)
+    all_rows = [r for r in all_rows if r.get(unique_key)]
     index = {}
     for i, row in enumerate(all_rows):
         key = row.get(unique_key)
         if key:
             index[key] = i
     new_rows = []
+    skipped = 0
     for data_row in data_rows:
         uid = data_row.get(unique_key)
         if not uid:
+            skipped += 1
             continue
         if uid in index:
             all_rows[index[uid]].update(data_row)
         else:
             new_rows.append(data_row)
     all_rows.extend(new_rows)
+    if skipped:
+        print(f"    [DB UPSERT] Skipped {skipped} rows with empty '{unique_key}'.")
     _write_csv(filepath, all_rows, fieldnames)
+
+# --- Async Shared Lock versions for Concurrency ---
+
+async def async_read_csv(filepath: str) -> List[Dict[str, str]]:
+    """Thread-safe async read of a CSV file."""
+    async with CSV_LOCK:
+        return _read_csv(filepath)
+
+async def async_write_csv(filepath: str, data: List[Dict], fieldnames: List[str]):
+    """Thread-safe async write of a CSV file."""
+    async with CSV_LOCK:
+        _write_csv(filepath, data, fieldnames)
+
+async def async_batch_upsert(filepath: str, data_rows: List[Dict], fieldnames: List[str], unique_key: str):
+    """Thread-safe async batch UPSERT."""
+    async with CSV_LOCK:
+        batch_upsert(filepath, data_rows, fieldnames, unique_key)
 
 # --- Data Store Paths ---
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -145,7 +174,11 @@ def log_audit_event(event_type: str, description: str, balance_before: Optional[
 
 def save_prediction(match_data: Dict[str, Any], prediction_result: Dict[str, Any]):
     """UPSERTs a prediction into the predictions.csv file."""
-    fixture_id = match_data.get('id', 'unknown')
+    fixture_id = match_data.get('fixture_id') or match_data.get('id')
+    if not fixture_id or fixture_id == 'unknown':
+        print(f"   [Warning] Skipping prediction save: Missing unique fixture_id for {match_data.get('home_team')} v {match_data.get('away_team')}")
+        return
+
     date = match_data.get('date', dt.now().strftime("%d.%m.%Y"))
 
     new_row_data = {
@@ -180,10 +213,11 @@ def save_prediction(match_data: Dict[str, Any], prediction_result: Dict[str, Any
         'market_reliability_score': str(prediction_result.get('market_reliability', 0.0)),
         'home_crest_url': get_team_crest(match_data.get('home_team_id'), match_data.get('home_team')),
         'away_crest_url': get_team_crest(match_data.get('away_team_id'), match_data.get('away_team')),
+        'recommendation_score': str(prediction_result.get('recommendation_score', 0)),
         'h2h_fixture_ids': json.dumps(prediction_result.get('h2h_fixture_ids', [])),
         'form_fixture_ids': json.dumps(prediction_result.get('form_fixture_ids', [])),
         'standings_snapshot': json.dumps(prediction_result.get('standings_snapshot', [])),
-        'league_id': match_data.get('league_id', ''),
+        'league_stage': match_data.get('league_stage', ''),
         'last_updated': dt.now().isoformat()
     }
 
@@ -255,10 +289,6 @@ def backfill_prediction_entry(fixture_id: str, updates: Dict[str, str]):
     return updated
 
 def save_schedule_entry(match_info: Dict[str, Any]):
-    # Ensure league_id is present if missing from match_info
-    if 'league_id' not in match_info:
-        match_info['league_id'] = ''
-
     # Ensure last_updated is present
     match_info['last_updated'] = dt.now().isoformat()
 
@@ -280,17 +310,13 @@ def save_standings(standings_data: List[Dict[str, Any]], region_league: str, lea
         row['region_league'] = region_league or row.get('region_league', 'Unknown')
         row['last_updated'] = last_updated
         
-        # Priority 1: Provided league_id
-        # Priority 2: row['league_id'] (already parsed)
-        # Priority 3: Extract from region_league
+        t_id = row.get('team_id', '')
         l_id = league_id or row.get('league_id', '')
         if not l_id and region_league and " - " in region_league:
              l_id = region_league.split(" - ")[1].replace(' ', '_').upper()
-        
         row['league_id'] = l_id
-        t_id = row.get('team_id', '')
 
-        # Unique key is now team_id + league_id
+        # Unique key is league_id + team_id
         if t_id and l_id:
             row['standings_key'] = f"{l_id}_{t_id}".upper()
             upsert_entry(STANDINGS_CSV, row, files_and_headers[STANDINGS_CSV], 'standings_key')
@@ -324,16 +350,16 @@ def _standardize_url(url: str, base_type: str = "flashscore") -> str:
 
 def save_region_league_entry(info: Dict[str, Any]):
     """Saves or updates a single region-league entry in region_league.csv."""
-    rl_id = info.get('rl_id')
+    league_id = info.get('league_id')
     
-    # Validation: rl_id should preferentially be the fragment hash if available
+    # Validation: league_id should preferentially be the fragment hash if available
     region = info.get('region', 'Unknown')
     league = info.get('league', 'Unknown')
-    if not rl_id:
-        rl_id = f"{region}_{league}".replace(' ', '_').replace('-', '_').upper()
+    if not league_id:
+        league_id = f"{region}_{league}".replace(' ', '_').replace('-', '_').upper()
 
     entry = {
-        'rl_id': rl_id,
+        'league_id': league_id,
         'region': region,
         'region_flag': _standardize_url(info.get('region_flag', '')),
         'region_url': _standardize_url(info.get('region_url', '')),
@@ -344,7 +370,7 @@ def save_region_league_entry(info: Dict[str, Any]):
         'last_updated': dt.now().isoformat()
     }
 
-    upsert_entry(REGION_LEAGUE_CSV, entry, files_and_headers[REGION_LEAGUE_CSV], 'rl_id')
+    upsert_entry(REGION_LEAGUE_CSV, entry, files_and_headers[REGION_LEAGUE_CSV], 'league_id')
 
 
 def save_team_entry(team_info: Dict[str, Any]):
@@ -352,23 +378,23 @@ def save_team_entry(team_info: Dict[str, Any]):
     team_id = team_info.get('team_id')
     if not team_id or team_id == 'unknown': return
 
-    # Check for existing entry to merge rl_ids
+    # Check for existing entry to merge league_ids
     existing_rows = _read_csv(TEAMS_CSV)
-    new_rl_id = team_info.get('rl_ids', team_info.get('region_league', ''))
+    new_league_id = team_info.get('league_ids', team_info.get('region_league', ''))
     
-    merged_rl_ids = new_rl_id
+    merged_league_ids = new_league_id
     for row in existing_rows:
         if row.get('team_id') == team_id:
-            existing_rl_ids = row.get('rl_ids', '').split(';')
-            if new_rl_id and new_rl_id not in existing_rl_ids:
-                existing_rl_ids.append(new_rl_id)
-            merged_rl_ids = ';'.join(filter(None, existing_rl_ids))
+            existing_league_ids = row.get('league_ids', '').split(';')
+            if new_league_id and new_league_id not in existing_league_ids:
+                existing_league_ids.append(new_league_id)
+            merged_league_ids = ';'.join(filter(None, existing_league_ids))
             break
 
     entry = {
         'team_id': team_id,
         'team_name': team_info.get('team_name', 'Unknown'),
-        'rl_ids': merged_rl_ids,
+        'league_ids': merged_league_ids,
         'team_crest': _standardize_url(team_info.get('team_crest', '')),
         'team_url': _standardize_url(team_info.get('team_url', '')),
         'last_updated': dt.now().isoformat()
@@ -574,24 +600,25 @@ files_and_headers = {
         'home_team_id', 'away_team_id', 'prediction', 'confidence', 'reason', 'xg_home', 
         'xg_away', 'btts', 'over_2.5', 'best_score', 'top_scores', 'home_form_n', 
         'away_form_n', 'home_tags', 'away_tags', 'h2h_tags', 'standings_tags', 
-        'h2h_count', 'form_count', 'actual_score', 'outcome_correct', 
-        'generated_at', 'status', 'match_link', 'odds', 'market_reliability_score',
-        'home_crest_url', 'away_crest_url', 'is_recommended', 'recommendation_score',
-        'h2h_fixture_ids', 'form_fixture_ids', 'standings_snapshot', 'league_id', 
+        'h2h_count', 'actual_score', 'outcome_correct', 
+        'status', 'match_link', 'odds', 'market_reliability_score',
+        'home_crest_url', 'away_crest_url', 'recommendation_score',
+        'h2h_fixture_ids', 'form_fixture_ids', 'standings_snapshot',
         'league_stage', 'last_updated'
     ],
     SCHEDULES_CSV: [
-        'fixture_id', 'date', 'match_time', 'region_league', 'league_id', 'home_team', 'away_team',
-        'home_team_id', 'away_team_id', 'home_score', 'away_score', 'match_status', 
+        'fixture_id', 'date', 'match_time', 'region_league', 'league_id',
+        'home_team', 'away_team', 'home_team_id', 'away_team_id',
+        'home_score', 'away_score', 'match_status', 
         'match_link', 'league_stage', 'last_updated'
     ],
     STANDINGS_CSV: [
         'standings_key', 'league_id', 'team_id', 'team_name', 'position', 'played', 'wins', 'draws',
         'losses', 'goals_for', 'goals_against', 'goal_difference', 'points', 
-        'last_updated', 'url', 'region_league'
+        'last_updated', 'region_league'
     ],
-    TEAMS_CSV: ['team_id', 'team_name', 'rl_ids', 'team_crest', 'team_url', 'last_updated'],
-    REGION_LEAGUE_CSV: ['rl_id', 'region', 'region_flag', 'region_url', 'league', 'league_crest', 'league_url', 'date_updated', 'last_updated'],
+    TEAMS_CSV: ['team_id', 'team_name', 'league_ids', 'team_crest', 'team_url', 'last_updated', 'country', 'city', 'stadium', 'other_names', 'abbreviations', 'search_terms'],
+    REGION_LEAGUE_CSV: ['league_id', 'region', 'region_flag', 'region_url', 'league', 'league_crest', 'league_url', 'date_updated', 'last_updated', 'other_names', 'abbreviations', 'search_terms'],
     ACCURACY_REPORTS_CSV: ['report_id', 'timestamp', 'volume', 'win_rate', 'return_pct', 'period', 'last_updated'],
     FB_MATCHES_CSV: [
         'site_match_id', 'date', 'time', 'home_team', 'away_team', 'league', 'url', 

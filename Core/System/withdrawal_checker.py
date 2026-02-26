@@ -9,6 +9,12 @@ from pathlib import Path
 from Core.System.lifecycle import state, log_audit_state, log_state
 from Data.Access.db_helpers import log_audit_event
 from Core.Intelligence.aigo_suite import AIGOSuite
+from Core.Utils.constants import DEFAULT_STAKE, CURRENCY_SYMBOL
+
+# Scalable Thresholds (relative to DEFAULT_STAKE)
+MIN_BALANCE_RESERVE = DEFAULT_STAKE * 5000 # Keep 5,000 units by default
+WITHDRAWAL_TRIGGER_BALANCE = DEFAULT_STAKE * 10000
+MIN_WIN_TRIGGER = DEFAULT_STAKE * 5000
 
 # Local state for withdrawals
 pending_withdrawal = {
@@ -20,22 +26,22 @@ pending_withdrawal = {
 }
 
 def calculate_proposed_amount(balance: float, latest_win: float) -> float:
-    """v2.7 Calculation: Min(30% balance, 50% latest win)."""
+    """Calculation: Min(30% balance, 50% latest win)."""
     val = min(balance * 0.30, latest_win * 0.50)
-    # Ensure floor of 5,000 remains in account
-    if balance - val < 5000:
-        val = balance - 5000
+    # Ensure floor remains in account
+    if balance - val < MIN_BALANCE_RESERVE:
+        val = balance - MIN_BALANCE_RESERVE
     
     return max(0.0, float(int(val))) # Round to whole number
 
 def get_latest_win() -> float:
     """Retrieves the latest win amount from audit logs or state."""
-    return state.get("last_win_amount", 5000.0)
+    return state.get("last_win_amount", MIN_WIN_TRIGGER)
 
 async def check_triggers(page=None) -> bool:
     """v2.7 Triggers."""
     balance = state.get("current_balance", 0.0)
-    if balance >= 10000 and get_latest_win() >= 5000:
+    if balance >= WITHDRAWAL_TRIGGER_BALANCE and get_latest_win() >= MIN_WIN_TRIGGER:
         return True
     return False
 
@@ -52,11 +58,11 @@ async def propose_withdrawal(amount: float):
         "approved": False
     })
 
-    print(f"   [Withdrawal] Proposal active: ₦{amount:.2f} (Awaiting LeoBook Web/App approval)")
+    print(f"   [Withdrawal] Proposal active: {CURRENCY_SYMBOL}{amount:.2f} (Awaiting LeoBook Web/App approval)")
     # Persist proposal to Supabase via audit log for Web/App approval UI
     log_audit_event(
         "WITHDRAWAL_PROPOSAL",
-        f"Proposed: ₦{amount:.2f} | Balance: ₦{state.get('current_balance', 0):.2f}",
+        f"Proposed: {CURRENCY_SYMBOL}{amount:.2f} | Balance: {CURRENCY_SYMBOL}{state.get('current_balance', 0):.2f}",
         status="pending"
     )
 
@@ -95,7 +101,7 @@ async def check_withdrawal_approval() -> bool:
 @AIGOSuite.aigo_retry(max_retries=2, delay=5.0)
 async def execute_withdrawal(amount: float):
     """Executes the withdrawal using an isolated browser context (v2.8)."""
-    print(f"   [Execute] Starting approved withdrawal for ₦{amount:.2f}...")
+    print(f"   [Execute] Starting approved withdrawal for {CURRENCY_SYMBOL}{amount:.2f}...")
     from playwright.async_api import async_playwright
     
     async with async_playwright() as p:
@@ -112,8 +118,8 @@ async def execute_withdrawal(amount: float):
             success = await check_and_perform_withdrawal(page, state["current_balance"], last_win_amount=amount*2)
             
             if success:
-                log_state("Withdrawal", f"Executed ₦{amount:,.2f}", "Web/App Approval")
-                log_audit_event("WITHDRAWAL_EXECUTED", f"Executed: ₦{amount}", state["current_balance"], state["current_balance"]-amount, amount)
+                log_state("Withdrawal", f"Executed {CURRENCY_SYMBOL}{amount:,.2f}", "Web/App Approval")
+                log_audit_event("WITHDRAWAL_EXECUTED", f"Executed: {CURRENCY_SYMBOL}{amount}", state["current_balance"], state["current_balance"]-amount, amount)
                 state["last_withdrawal_time"] = dt.now()
                 # Reset pending state
                 pending_withdrawal.update({"active": False, "amount": 0.0, "proposed_at": None, "expiry": None, "approved": False})

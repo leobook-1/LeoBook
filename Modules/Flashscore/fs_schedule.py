@@ -26,57 +26,99 @@ async def extract_matches_from_page(page: Page) -> list:
     matches = await extract_all_matches(page, label="Extractor")
 
     if matches:
-        print(f"    [Extractor] Pairings complete. Saving {len(matches)} fixtures and teams...")
+        print(f"    [Extractor] Pairings complete. Saving {len(matches)} fixtures, teams and leagues...")
 
-        # Build schedule rows for batch upsert
+        # Build rows for batch upsert
         now = dt.now().isoformat()
         schedule_rows = []
         team_rows = []
+        rl_rows = []
+        
         seen_teams = set()
+        seen_leagues = set()
 
         for m in matches:
+            # 1. Schedule Data
             schedule_rows.append({
                 'fixture_id': m.get('fixture_id'),
-                'date': m.get('date', ''),
-                'match_time': m.get('match_time', ''),
-                'region_league': m.get('region_league', ''),
-                'league_id': m.get('league_id', ''),
-                'home_team': m.get('home_team', ''),
-                'away_team': m.get('away_team', ''),
-                'home_team_id': m.get('home_team_id', ''),
-                'away_team_id': m.get('away_team_id', ''),
+                'date': m.get('date') or 'Unknown',
+                'match_time': m.get('match_time') or 'Unknown',
+                'region_league': m.get('region_league') or 'Unknown',
+                'league_id': m.get('league_id') or 'Unknown',
+                'home_team': m.get('home_team') or 'Unknown',
+                'away_team': m.get('away_team') or 'Unknown',
+                'home_team_id': m.get('home_team_id') or 'Unknown',
+                'away_team_id': m.get('away_team_id') or 'Unknown',
                 'home_score': m.get('home_score', ''),
                 'away_score': m.get('away_score', ''),
-                'match_status': m.get('status', 'scheduled'),
-                'match_link': m.get('match_link', ''),
+                'match_status': m.get('status') or 'scheduled',
+                'match_link': m.get('match_link') or 'Unknown',
+                'league_stage': m.get('league_stage') or 'Unknown',
                 'last_updated': now
             })
 
-            region = m['region_league'].split(' - ')[0] if ' - ' in m['region_league'] else 'Unknown'
-            for prefix, name_key in [('home', 'home_team'), ('away', 'away_team')]:
-                tid = m.get(f'{prefix}_team_id') or f"t_{hash(m[name_key]) & 0xfffffff}"
-                if tid not in seen_teams:
+            # 2. League Data (Region League)
+            rl_name = m.get('region_league', 'Unknown')
+            if rl_name not in seen_leagues:
+                seen_leagues.add(rl_name)
+                region = rl_name.split(' - ')[0] if ' - ' in rl_name else 'Unknown'
+                league = rl_name.split(' - ')[1] if ' - ' in rl_name else rl_name
+                
+                # league_id: Use slug from URL if available, else derive from name
+                l_url = m.get('league_url', '')
+                league_id = 'unknown'
+                if l_url and '/football/' in l_url:
+                    # Robust parsing for absolute Flashscore URLs
+                    slug_parts = l_url.split('/football/')[-1].strip('/').split('/')
+                    # slug_parts: [region, league-slug] or [region]
+                    if len(slug_parts) >= 2:
+                        league_id = f"{slug_parts[0]}_{slug_parts[1]}".upper().replace('-', '_')
+                    elif len(slug_parts) == 1:
+                        league_id = slug_parts[0].upper().replace('-', '_')
+                
+                if league_id == 'unknown' or not league_id:
+                    league_id = rl_name.replace(' ', '_').replace('-', '_').upper()
+                
+                rl_rows.append({
+                    'league_id': league_id,
+                    'region': region or 'Unknown',
+                    'league': league or 'Unknown',
+                    'league_url': m.get('league_url') or 'Unknown',
+                    'league_crest': m.get('league_crest') or 'Unknown', 
+                    'region_flag': m.get('region_flag') or 'Unknown',
+                    'date_updated': now,
+                    'last_updated': now
+                })
+
+            # 3. Team Data
+            for prefix in ['home', 'away']:
+                tid = m.get(f'{prefix}_team_id')
+                if tid and tid not in seen_teams:
                     seen_teams.add(tid)
                     team_rows.append({
                         'team_id': tid,
-                        'team_name': m[name_key],
-                        'rl_ids': region,
-                        'team_crest': '',
-                        'team_url': '',
+                        'team_name': m.get(f'{prefix}_team') or 'Unknown',
+                        'league_ids': league_id,
+                        'team_crest': m.get(f'{prefix}_crest') or 'Unknown',
+                        'team_url': m.get(f'{prefix}_team_url') or 'Unknown',
                         'last_updated': now
                     })
 
-        # Single read + write per file (instead of 1900 individual upserts)
+        # Multi-table batch upsert (single read/write per file)
+        from Data.Access.db_helpers import REGION_LEAGUE_CSV
         batch_upsert(SCHEDULES_CSV, schedule_rows, files_and_headers[SCHEDULES_CSV], 'fixture_id')
         batch_upsert(TEAMS_CSV, team_rows, files_and_headers[TEAMS_CSV], 'team_id')
-        print(f"    [Extractor] Saved {len(schedule_rows)} schedules + {len(team_rows)} teams.")
+        batch_upsert(REGION_LEAGUE_CSV, rl_rows, files_and_headers[REGION_LEAGUE_CSV], 'league_id')
+        
+        print(f"    [Extractor] Saved {len(schedule_rows)} fixtures, {len(team_rows)} teams, and {len(rl_rows)} leagues.")
 
         # Cloud sync
         sync = SyncManager()
         if sync.supabase:
-            print(f"    [Cloud] Upserting {len(schedule_rows)} schedules and {len(team_rows)} teams...")
+            print(f"    [Cloud] Synchronizing metadata to Supabase...")
             await sync.batch_upsert('schedules', schedule_rows)
             await sync.batch_upsert('teams', team_rows)
+            await sync.batch_upsert('region_league', rl_rows)
             print(f"    [SUCCESS] Multi-table synchronization complete.")
 
     return matches

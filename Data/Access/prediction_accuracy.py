@@ -321,7 +321,6 @@ def format_date_range(date_range: Dict) -> str:
         return f"{earliest_formatted} to {latest_formatted}"
 
 
-@AIGOSuite.aigo_retry(max_retries=2, delay=2.0, use_aigo=False)
 def print_accuracy_report():
     """
     Print the prediction accuracy report to console.

@@ -97,7 +97,7 @@ async def extract_standings_data(page: Page, context: str = "fs_standings_tab") 
     js_code = r"""(selectors) => {
         const getText = (el, sel) => {
             const elem = el?.querySelector(sel);
-            return elem ? elem.innerText?.trim() : null;
+            return elem ? elem.innerText?.trim() || 'Unknown' : 'Unknown';
         };
         const getInt = (text) => {
             if (text === null) return null;
@@ -118,7 +118,7 @@ async def extract_standings_data(page: Page, context: str = "fs_standings_tab") 
 
         rows.forEach((row, index) => {
             const teamLink = getHref(row, selectors.standings_col_team_link);
-            let teamId = null;
+            let teamId = 'Unknown';
             if (teamLink) {
                 const parts = teamLink.split('/').filter(p => p);
                 const teamIndex = parts.indexOf('team');

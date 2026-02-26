@@ -2,8 +2,8 @@
 
 **Developer**: Matterialless LLC
 **Chief Engineer**: Emenike Chinenye James
-**Powered by**: Grok 4.1 & Gemini 3
-**Architecture**: Concurrent Clean Architecture v3.3 (Sequential + Parallel Pipeline)
+**Powered by**: Grok 4.1 & Gemini 2.5 Flash
+**Architecture**: High-Velocity Concurrent Architecture v3.5 (Shared Locking + Parallel Enrichment)
 
 ---
 
@@ -27,19 +27,21 @@ For the complete file inventory and step-by-step execution trace, see [LeoBook_T
 ```
 Leo.py (Orchestrator)
 ├── Phase 1 (Sequential): Cloud Sync → Outcome Review → Accuracy Report
-├── Phase 2 (Concurrent/Gather):
-│   ├── Stream A: Enrichment → Final Prologue Sync
-│   └── Stream B: Extraction → Adaptive Prediction → Odds Harvesting → Booking
+├── Phase 2 (Parallel Execution):
+│   ├── Task A: High-Velocity League Enrichment (Multi-Page)
+│   ├── Task B: Async Search Dictionary Building
+│   └── Task C: Main Chapter Pipeline (Extraction → Adaptive Prediction → Booking)
 ├── Phase 3 (Sequential): Chief Engineer Oversight & Withdrawal Management
 └── Live Streamer: Background 60s LIVE score streaming → status propagation
 ```
 
-### Key Innovations (v3.2)
-- **Concurrent Pipeline**: Prologue enrichment runs alongside Chapter 1 predictions, reducing cycle time by ~30%.
-- **First-Principles Cleanup**: Stripped 12+ dead files and unified popup/selector architectures for a minimalist, ultra-fast codebase.
-- **End-to-End Resumability**: Every step (Harvesting, Booking, Enrichment) uses persistent status checks to skip already-processed items on restart.
-- **Adaptive Learning Feedback**: Rule weights and confidence calibration now evolve after every outcome review, stored in `learning_weights.json` and synced to the cloud.
-- **Robust Scrapers**: 2-tier header expansion retry logic (JS + Locator) in Flashscore scrapers.
+### Key Innovations (v3.5)
+- **High-Velocity Concurrency**: `Leo.py` uses `asyncio.gather` for parallel pipeline execution. `enrich_leagues.py` uses multi-page Playwright concurrency for 5x faster processing.
+- **Shared Data Integrity**: Implemented a global `CSV_LOCK` (Asyncio Lock) in `db_helpers.py` ensuring thread-safe access to persistent stores during parallel operations.
+- **Async Search Dict**: The search dictionary engine is now fully asynchronous, integrating seamlessly with the high-speed enrichment pipeline.
+- **Incremental Persistence**: Data is written per-item, ensuring zero loss if a cycle is interrupted.
+- **Hash-Based Identity**: URL hash-based `league_id` for 100% collision-free mapping and stable history tracking.
+- **Dual-LLM Fallback**: Logic enrichment now uses Grok as primary and Gemini as secondary fallback for maximum reliability.
 
 ### Core Modules
 
@@ -131,6 +133,8 @@ playwright install chromium
 cp .env.example .env  # Configure API keys
 python Leo.py              # Full cycle
 python Leo.py --prologue    # Run prologue only
+python Leo.py --enrich-leagues # Run league metadata enrichment
+python Leo.py --search-dict # Build team/league search dictionary
 python Leo.py --chapter 1   # Run chapter 1 only
 python Leo.py --chapter 2 --page 1 # Automated Booking only
 python Leo.py --chapter 2 --page 2 # Withdrawal Check only
@@ -153,7 +157,8 @@ flutter run -d chrome  # or: flutter run (mobile)
 
 | Variable | Purpose |
 |----------|---------|
-| `GROK_API_KEY` | xAI Grok API for AIGO (Autonomous Intelligence Guided Operation) & Search Dictionary building |
+| `GROK_API_KEY` | xAI Grok API (Primary LLM) for Metadata Enrichment |
+| `GEMINI_API_KEY` | Google Gemini API (Secondary Fallback LLM) |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key (Python backend, full write access) |
 | `SUPABASE_ANON_KEY` | Supabase anon key (Flutter app, read-only via RLS) |
