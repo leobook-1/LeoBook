@@ -253,6 +253,10 @@ async def unified_api_call(prompt_content, generation_config=None, **kwargs):
                         elif "403" in err_str:
                             health_manager.on_gemini_403(api_key)
                             continue
+                        elif "503" in err_str or "UNAVAILABLE" in err_str:
+                            print(f"    [AI WARNING] Gemini {model_name} failed: 503 UNAVAILABLE. Backing off 8s...")
+                            await asyncio.sleep(8)
+                            continue  # Retry same key — 503 is transient
                         else:
                             print(f"    [AI WARNING] Gemini {model_name} failed: {e}")
                             break  # Non-rate-limit error, try next model

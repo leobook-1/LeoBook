@@ -33,6 +33,7 @@ from Modules.Flashscore.fs_extractor import extract_all_matches, expand_all_leag
 STREAM_INTERVAL = 60  # seconds
 FLASHSCORE_URL = "https://www.flashscore.com/football/"
 _STREAMER_HEARTBEAT_FILE = os.path.join(os.path.dirname(LIVE_SCORES_CSV), '.streamer_heartbeat')
+_last_push_sig = None  # Delta detection: (frozenset(live_ids), sched_count, pred_count)
 
 # JS to expand the "Show More" dropdown found in mobile/collapsed views
 EXPAND_DROPDOWN_JS = """
@@ -406,20 +407,26 @@ async def live_score_streamer(playwright: Playwright, user_data_dir: str = None)
                         sched_upd, pred_upd = _propagate_status_updates(live_matches, resolved_matches)
                         print(f"   [Streamer] Status: Propagation updated {len(sched_upd)} schedule rows and {len(pred_upd)} prediction rows.")
 
-                        # Immediate Supabase Sync
-                        if sync.supabase:
-                            print(f"   [Streamer] Sync: Pushing updates to Supabase...")
-                            if live_matches: await sync.batch_upsert('live_scores', live_matches)
-                            if pred_upd: await sync.batch_upsert('predictions', pred_upd)
-                            if sched_upd: await sync.batch_upsert('schedules', sched_upd)
-                            if stale_ids:
-                                try:
-                                    print(f"   [Streamer] Sync: Deleting {len(stale_ids)} stale entries from Supabase.")
-                                    sync.supabase.table('live_scores').delete().in_('fixture_id', list(stale_ids)).execute()
-                                except Exception as e:
-                                    print(f"   [Streamer] Sync Warning: Supabase deletion failed: {e}")
+                        # Delta detection — skip push if nothing changed from last cycle
+                        current_sig = (frozenset(current_live_ids), len(sched_upd), len(pred_upd))
+                        if current_sig == _last_push_sig:
+                            print(f"   [Streamer] Cycle {cycle} complete at {now_ts}. Summary: {len(live_matches)} Live | {len(resolved_matches)} Resolved | {len(all_matches)} Scanned. (No delta — sync skipped)")
+                        else:
+                            _last_push_sig = current_sig
+                            # Immediate Supabase Sync
+                            if sync.supabase:
+                                print(f"   [Streamer] Sync: Pushing updates to Supabase...")
+                                if live_matches: await sync.batch_upsert('live_scores', live_matches)
+                                if pred_upd: await sync.batch_upsert('predictions', pred_upd)
+                                if sched_upd: await sync.batch_upsert('schedules', sched_upd)
+                                if stale_ids:
+                                    try:
+                                        print(f"   [Streamer] Sync: Deleting {len(stale_ids)} stale entries from Supabase.")
+                                        sync.supabase.table('live_scores').delete().in_('fixture_id', list(stale_ids)).execute()
+                                    except Exception as e:
+                                        print(f"   [Streamer] Sync Warning: Supabase deletion failed: {e}")
 
-                        print(f"   [Streamer] Cycle {cycle} complete at {now_ts}. Summary: {len(live_matches)} Live | {len(resolved_matches)} Resolved | {len(all_matches)} Scanned.")
+                            print(f"   [Streamer] Cycle {cycle} complete at {now_ts}. Summary: {len(live_matches)} Live | {len(resolved_matches)} Resolved | {len(all_matches)} Scanned.")
                     else:
                         _propagate_status_updates([], [])
                         print(f"   [Streamer] {now_ts} — No active/resolved matches found (Cycle {cycle}). Fallback check performed.")

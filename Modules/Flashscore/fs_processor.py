@@ -29,6 +29,8 @@ from .fs_utils import retry_extraction
 
 # Cache of league IDs already enriched in this cycle (avoid duplicate page visits)
 _enriched_leagues = set()
+# Cache of league names whose standings were already extracted this cycle
+_extracted_standings = set()
 
 async def process_match_task(match_data: dict, browser: Browser):
     """
@@ -96,10 +98,14 @@ async def process_match_task(match_data: dict, browser: Browser):
                     print(f"      [Graceful Skip] Match has Draw table (Cup/Tournament). Proceeding without standings.")
                     # We don't return False here, allowing H2H-only prediction
                 if standings_data and standings_league != "Unknown":
-                    for row in standings_data:
-                        row['url'] = standings_league_url
-                    save_standings(standings_data, standings_league)
-                    print(f"      [OK Standing] Standings tab data extracted for {standings_league}")
+                    if standings_league in _extracted_standings:
+                        print(f"      [Standings] '{standings_league}' already extracted this cycle — skipping DB write.")
+                    else:
+                        for row in standings_data:
+                            row['url'] = standings_league_url
+                        save_standings(standings_data, standings_league)
+                        _extracted_standings.add(standings_league)
+                        print(f"      [OK Standing] Standings tab data extracted for {standings_league}")
                 ## Phase 5: League Stage Parsing Fix
                 # - [x] Update `db_helpers.py` headers for `league_stage`
                 # - [x] Update `enrich_all_schedules.py`

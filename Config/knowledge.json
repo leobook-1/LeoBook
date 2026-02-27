@@ -121,7 +121,7 @@
         "h2h_show_more_button": ".h2h__showMore"
     },
     "fs_standings_tab": {
-        "standings_row": "div.bracket",
+        "standings_row": ".ui-table__row",
         "standings_col_rank": ".tableCellRank",
         "standings_col_team_name": ".tableCellParticipant__name",
         "standings_col_team_link": ".tableCellParticipant__name",

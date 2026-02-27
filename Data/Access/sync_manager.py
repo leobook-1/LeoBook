@@ -274,6 +274,9 @@ class SyncManager:
 
                 if v in ('', 'N/A', None, 'None', 'none', 'nan', 'NaN', 'null', 'NULL'):
                     clean[k] = None
+                # Fix: Convert stringified empty arrays to None for Postgres TEXT[] columns
+                elif isinstance(v, str) and v.strip() in ('[]', '[""]', "['']"):
+                    clean[k] = None
                 else:
                     val = v
                     # CSV (DD.MM.YYYY or DD.MM.YY) -> DB (YYYY-MM-DD)
